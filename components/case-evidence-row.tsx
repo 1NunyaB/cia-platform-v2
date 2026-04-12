@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AnalyzeButton } from "@/components/analyze-button";
 import { ProcessingBadge } from "@/components/processing-badge";
 import { Badge } from "@/components/ui/badge";
-import type { AiAnalysis, EvidenceFile, EvidenceProcessingStatus } from "@/types";
+import { type AiAnalysis, type EvidenceFile, type EvidenceProcessingStatus } from "@/types";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 
 function truncate(s: string, n: number) {
