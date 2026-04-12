@@ -1,0 +1,136 @@
+import { extractTextFromBuffer } from "@/services/text-extraction-service";
+import {
+  MAX_IMPORT_BYTES,
+  htmlToPlainText,
+  isLikelyPdfBuffer,
+  parsePublicHttpUrl,
+} from "@/lib/url-import-utils";
+
+export type UrlImportResult = {
+  text: string;
+  extractionNote?: string;
+  /** For display / storage filename */
+  sourceLabel: string;
+};
+
+function safeFilenameSegment(s: string): string {
+  return s.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "page";
+}
+
+/**
+ * Fetch a public URL and produce plain text suitable for evidence extraction (same downstream as uploads).
+ */
+export async function fetchTextFromPublicUrl(urlStr: string): Promise<UrlImportResult> {
+  const u = parsePublicHttpUrl(urlStr);
+  const sourceLabel = u.href;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+  let res: Response;
+  try {
+    res = await fetch(u.href, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/pdf,text/plain;q=0.9,*/*;q=0.8",
+        "User-Agent": "CrowdInvestigationsAgency/1.0 (evidence URL import)",
+      },
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Request failed";
+    if (msg.includes("abort")) {
+      throw new Error("The page took too long to respond. Try a smaller page or a direct file link.");
+    }
+    throw new Error(`Could not reach that address: ${msg}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!res.ok) {
+    throw new Error(`The server returned ${res.status} ${res.statusText || ""}`.trim());
+  }
+
+  const lenHeader = res.headers.get("content-length");
+  if (lenHeader) {
+    const n = parseInt(lenHeader, 10);
+    if (!Number.isNaN(n) && n > MAX_IMPORT_BYTES) {
+      throw new Error("That file is too large to import (max ~15 MB). Try a direct link to a smaller document.");
+    }
+  }
+
+  const arrayBuf = await res.arrayBuffer();
+  if (arrayBuf.byteLength > MAX_IMPORT_BYTES) {
+    throw new Error("Download was too large (max ~15 MB). Try a smaller page or document.");
+  }
+
+  const buffer = Buffer.from(arrayBuf);
+  const ct = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+
+  if (ct.includes("application/pdf") || isLikelyPdfBuffer(buffer)) {
+    const { method, text } = await extractTextFromBuffer(buffer, "application/pdf");
+    const raw =
+      method === "ocr_pending"
+        ? text ||
+          "[No text extracted from PDF — scanned document may need OCR. See text extraction settings.]"
+        : text;
+    if (!raw.trim()) {
+      throw new Error("No readable text could be extracted from that PDF.");
+    }
+    return {
+      text: raw,
+      extractionNote: method === "ocr_pending" ? "PDF text layer missing; placeholder text stored." : undefined,
+      sourceLabel,
+    };
+  }
+
+  if (ct.startsWith("text/") || ct === "application/json" || ct === "") {
+    const text = buffer.toString("utf8");
+    if (!text.trim()) {
+      throw new Error("That page had no readable text content.");
+    }
+    return { text, sourceLabel };
+  }
+
+  if (ct.includes("html") || ct.includes("xml")) {
+    const html = buffer.toString("utf8");
+    const text = htmlToPlainText(html);
+    if (!text.trim()) {
+      throw new Error("No readable text could be pulled from that page (it may be mostly images or scripts).");
+    }
+    return { text, sourceLabel };
+  }
+
+  /** Unknown type: try UTF-8 text, then HTML strip, then PDF sniff. */
+  if (isLikelyPdfBuffer(buffer)) {
+    const { method, text } = await extractTextFromBuffer(buffer, "application/pdf");
+    const raw =
+      method === "ocr_pending"
+        ? text ||
+          "[No text extracted from PDF — scanned document may need OCR. See text extraction settings.]"
+        : text;
+    if (raw.trim()) {
+      return { text: raw, sourceLabel };
+    }
+  }
+
+  const asUtf8 = buffer.toString("utf8");
+  if (asUtf8.trim() && !asUtf8.includes("\0")) {
+    return { text: asUtf8, sourceLabel };
+  }
+
+  const stripped = htmlToPlainText(asUtf8);
+  if (stripped.trim()) {
+    return { text: stripped, sourceLabel };
+  }
+
+  throw new Error(
+    `Unsupported content type for import (${ct || "unknown"}). Try a web page, PDF, or plain text link.`,
+  );
+}
+
+export function buildImportFilename(u: URL): string {
+  const host = safeFilenameSegment(u.hostname);
+  const pathPart = u.pathname.split("/").filter(Boolean).pop() ?? "page";
+  const base = safeFilenameSegment(pathPart).replace(/\.[^.]+$/, "");
+  return `import-${host}-${base}-${Date.now()}.txt`;
+}
