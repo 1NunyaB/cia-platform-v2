@@ -410,6 +410,7 @@ async function persistAnalysis(
 
   await clearInvestigationArtifactsForEvidence(supabase, evidenceId, caseId);
 
+  const f = structured.finding;
   const { data: analysisRow, error: aErr } = await supabase
     .from("ai_analyses")
     .insert({
@@ -418,6 +419,15 @@ async function persistAnalysis(
       redaction_notes: redactionNotes,
       model,
       structured: structured as unknown as Record<string, unknown>,
+      full_response_json: structured as unknown as Record<string, unknown>,
+      analysis_kind: "evidence_file",
+      inquiry_prompt: null,
+      finding_answer: f.finding_answer,
+      confidence_label: f.confidence,
+      classification: f.classification,
+      reasoning: f.reasoning,
+      limitations: f.limitations,
+      suggested_next_steps: f.next_step,
     })
     .select("id")
     .single();

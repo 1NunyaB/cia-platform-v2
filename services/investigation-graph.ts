@@ -401,12 +401,16 @@ export async function persistTimelineAndRelationships(
       .map((fn) => resolver.resolveFilenameOrHint(fn))
       .filter((id): id is string => Boolean(id));
 
-    const tier = resolveTimelineTier({
+    let tier = resolveTimelineTier({
       event: ev,
       findingClassification: finding.classification,
       originEvidenceId: evidenceId,
       resolvedSupportingEvidenceIds: resolvedSupporting,
     });
+    /** Never Timeline 1 on weak finding confidence alone (multi-source rules still apply downstream). */
+    if (finding.confidence === "low" && tier === "t1_confirmed") {
+      tier = "t2_supported";
+    }
 
     const kind = normalizeTimelineKind(ev.timeline_kind);
     const authenticityLabel = normalizeAuthenticityLabel(
@@ -447,6 +451,8 @@ export async function persistTimelineAndRelationships(
     const { error: p0 } = await supabase.from("timeline_event_evidence").insert({
       timeline_event_id: tid,
       evidence_file_id: evidenceId,
+      ai_analysis_id: analysisId,
+      link_role: "primary",
     });
     if (p0 && p0.code !== "23505") throw new Error(p0.message);
 
@@ -456,6 +462,8 @@ export async function persistTimelineAndRelationships(
       const { error: p1 } = await supabase.from("timeline_event_evidence").insert({
         timeline_event_id: tid,
         evidence_file_id: eid,
+        ai_analysis_id: analysisId,
+        link_role: "supporting",
       });
       if (p1 && p1.code !== "23505") throw new Error(p1.message);
     }

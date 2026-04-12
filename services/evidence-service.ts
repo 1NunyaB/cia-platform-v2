@@ -1,4 +1,4 @@
-import type { AppSupabaseClient } from "@/types";
+import type { AppSupabaseClient, ExtractedText, ExtractionMethod } from "@/types";
 import type { EvidenceSourcePayload } from "@/lib/evidence-source";
 import type { DuplicateEvidenceMatch } from "@/lib/evidence-upload-errors";
 import { buildDisplayFilename, composeShortAlias, deriveUploadAliasSeed } from "@/lib/evidence-display-alias";
@@ -312,9 +312,29 @@ export async function getExtractedText(supabase: AppSupabaseClient, evidenceId: 
     .from("extracted_texts")
     .select("*")
     .eq("evidence_file_id", evidenceId)
-    .maybeSingle();
+    .order("page_number", { ascending: true });
   if (error) throw new Error(error.message);
-  return data;
+  const rows = data ?? [];
+  if (rows.length === 0) return null;
+  if (rows.length === 1) {
+    const r = rows[0]!;
+    return {
+      ...r,
+      page_count: 1,
+    } as ExtractedText;
+  }
+  const rawMerged = rows.map((r) => (r.raw_text as string) ?? "").join("\n\n");
+  const hasOcr = rows.some((r) => r.extraction_method === "ocr");
+  const method: ExtractionMethod = hasOcr ? "ocr" : (rows[0]!.extraction_method as ExtractionMethod);
+  const first = rows[0]!;
+  return {
+    id: first.id as string,
+    evidence_file_id: evidenceId,
+    raw_text: rawMerged,
+    extraction_method: method,
+    created_at: first.created_at as string,
+    page_count: rows.length,
+  } as ExtractedText;
 }
 
 export async function getAiAnalysis(supabase: AppSupabaseClient, evidenceId: string) {

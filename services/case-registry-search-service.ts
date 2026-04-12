@@ -91,8 +91,10 @@ function classifyMatch(
 function extractedRawFromFileRow(f: Record<string, unknown>): string {
   const et = f.extracted_texts;
   if (Array.isArray(et)) {
-    const row = et[0] as { raw_text?: string | null } | undefined;
-    return row?.raw_text ?? "";
+    return et
+      .map((row) => String((row as { raw_text?: string | null }).raw_text ?? ""))
+      .filter(Boolean)
+      .join("\n\n");
   }
   if (et && typeof et === "object" && "raw_text" in (et as object)) {
     return String((et as { raw_text?: string | null }).raw_text ?? "");

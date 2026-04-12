@@ -18,7 +18,25 @@ import { scanEvidenceBuffer } from "@/services/evidence-scan-service";
 import { extractTextForEvidence } from "@/services/text-extraction-service";
 import { buildImportFilename, fetchTextFromPublicUrl } from "@/services/url-import-service";
 import { parsePublicHttpUrl } from "@/lib/url-import-utils";
+
 export type IngestResult = { id: string; warning?: string };
+
+/**
+ * Evidence ingestion (Node runtime only via API routes that call this module):
+ *
+ * 1. **Upload path** (`ingestUploadedFile`): validate policy → AV scan → Storage put →
+ *    `registerEvidenceFile` (`evidence_files`, status `accepted`) → `extractTextForEvidence`
+ *    (download bytes → text layer or OCR → `extracted_texts` by `evidence_file_id`).
+ * 2. **URL path** (`ingestEvidenceFromUrl`): fetch text → same policy/scan → Storage as `.txt` →
+ *    register → extract (plain text; PDFs from URLs use `extractTextFromBuffer` in fetch only — see
+ *    `url-import-service`).
+ *
+ * Extraction failures set `evidence_files.processing_status` / `error_message` and return `{ warning }`
+ * without removing the stored object.
+ *
+ * `extractTextForEvidence` skips work when `extracted_texts` rows already exist and status is not `error`
+ * (unless `{ force: true }` — see `POST /api/evidence/[evidenceId]/extract`).
+ */
 
 async function logRejectedUpload(
   supabase: AppSupabaseClient,
@@ -39,9 +57,7 @@ async function logRejectedUpload(
   }
 }
 
-/**
- * Validate → antivirus scan → storage → register (accepted) → extract text.
- */
+/** Validate → antivirus scan → storage → register (accepted) → `extractTextForEvidence`. */
 export async function ingestUploadedFile(
   supabase: AppSupabaseClient,
   input: {
@@ -141,11 +157,9 @@ export async function ingestUploadedFile(
     throw e;
   }
 
-  try {
-    await extractTextForEvidence(supabase, evidenceId, mime);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Extraction failed";
-    return { id: evidenceId, warning: message };
+  const extracted = await extractTextForEvidence(supabase, evidenceId, mime);
+  if (!extracted.ok) {
+    return { id: evidenceId, warning: extracted.error };
   }
 
   return { id: evidenceId };
@@ -256,11 +270,9 @@ export async function ingestEvidenceFromUrl(
     throw e;
   }
 
-  try {
-    await extractTextForEvidence(supabase, evidenceId, "text/plain");
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Extraction failed";
-    return { id: evidenceId, warning: [fetchNote, message].filter(Boolean).join(" ") };
+  const extracted = await extractTextForEvidence(supabase, evidenceId, "text/plain");
+  if (!extracted.ok) {
+    return { id: evidenceId, warning: [fetchNote, extracted.error].filter(Boolean).join(" ") };
   }
 
   return fetchNote ? { id: evidenceId, warning: fetchNote } : { id: evidenceId };

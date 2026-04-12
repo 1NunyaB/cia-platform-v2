@@ -27,6 +27,7 @@ export const INVESTIGATION_CATEGORY_LABELS: Record<InvestigationCategorySlug, st
   convicted: "Convicted",
   accusers: "Accusers",
   accused: "Accused",
+  victims: "Victims",
   dead: "Dead",
 };
 

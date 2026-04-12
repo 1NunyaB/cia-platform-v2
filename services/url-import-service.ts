@@ -1,3 +1,4 @@
+import { URL_IMPORT_PDF_NO_TEXT_LAYER_PLACEHOLDER } from "@/lib/extraction-messages";
 import { extractTextFromBuffer } from "@/services/text-extraction-service";
 import {
   MAX_IMPORT_BYTES,
@@ -70,15 +71,17 @@ export async function fetchTextFromPublicUrl(urlStr: string): Promise<UrlImportR
     const { method, text } = await extractTextFromBuffer(buffer, "application/pdf");
     const raw =
       method === "ocr_pending"
-        ? text ||
-          "[No text extracted from PDF — scanned document may need OCR. See text extraction settings.]"
+        ? text || URL_IMPORT_PDF_NO_TEXT_LAYER_PLACEHOLDER
         : text;
     if (!raw.trim()) {
       throw new Error("No readable text could be extracted from that PDF.");
     }
     return {
       text: raw,
-      extractionNote: method === "ocr_pending" ? "PDF text layer missing; placeholder text stored." : undefined,
+      extractionNote:
+        method === "ocr_pending"
+          ? "PDF text layer missing in fetch; placeholder stored. Upload the file for server-side OCR."
+          : undefined,
       sourceLabel,
     };
   }
@@ -105,8 +108,7 @@ export async function fetchTextFromPublicUrl(urlStr: string): Promise<UrlImportR
     const { method, text } = await extractTextFromBuffer(buffer, "application/pdf");
     const raw =
       method === "ocr_pending"
-        ? text ||
-          "[No text extracted from PDF — scanned document may need OCR. See text extraction settings.]"
+        ? text || URL_IMPORT_PDF_NO_TEXT_LAYER_PLACEHOLDER
         : text;
     if (raw.trim()) {
       return { text: raw, sourceLabel };

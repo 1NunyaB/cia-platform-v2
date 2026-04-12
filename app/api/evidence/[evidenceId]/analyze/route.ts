@@ -7,10 +7,13 @@ import { revalidatePath } from "next/cache";
 export const runtime = "nodejs";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ evidenceId: string }> },
 ) {
   const { evidenceId } = await params;
+  const url = new URL(request.url);
+  const force =
+    url.searchParams.get("force") === "1" || url.searchParams.get("force") === "true";
   const supabase = await createClient();
   const {
     data: { user },
@@ -48,10 +51,28 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "No extracted text available. Upload a text-based PDF or plain text, or connect OCR (TODO in text-extraction-service).",
+          "No extracted text available. Upload a text-based PDF, plain text, or a scannable image/PDF so OCR can run.",
       },
       { status: 400 },
     );
+  }
+
+  if (!force) {
+    const { data: existing } = await supabase
+      .from("ai_analyses")
+      .select("id, structured")
+      .eq("evidence_file_id", evidenceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing?.structured && typeof existing.structured === "object") {
+      const caseId = (ev.case_id as string | null) ?? null;
+      if (caseId) {
+        revalidatePath(`/cases/${caseId}`);
+      }
+      revalidatePath(`/evidence/${evidenceId}`);
+      return NextResponse.json({ analysisId: existing.id as string, cached: true });
+    }
   }
 
   try {

@@ -1,20 +1,25 @@
 import Link from "next/link";
 import {
-  INVESTIGATION_CATEGORIES,
-  normalizeEntityCategory,
-  type InvestigationCategory,
+  INVESTIGATION_CATEGORY_LABELS,
+  INVESTIGATION_CATEGORY_SLUGS,
+  normalizeCategoryToken,
 } from "@/lib/investigation-categories";
+import type { InvestigationCategorySlug } from "@/types";
 import type { EntityRow } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 function bucketEntities(entities: EntityRow[]) {
-  const buckets: Record<InvestigationCategory, EntityRow[]> = Object.fromEntries(
-    INVESTIGATION_CATEGORIES.map((c) => [c, []]),
-  ) as Record<InvestigationCategory, EntityRow[]>;
+  const buckets = INVESTIGATION_CATEGORY_SLUGS.reduce(
+    (acc, c) => {
+      acc[c] = [];
+      return acc;
+    },
+    {} as Record<InvestigationCategorySlug, EntityRow[]>,
+  );
   const uncategorized: EntityRow[] = [];
   for (const e of entities) {
-    const cat = normalizeEntityCategory(e.entity_type);
+    const cat = e.entity_type ? normalizeCategoryToken(e.entity_type) : null;
     if (cat) buckets[cat].push(e);
     else uncategorized.push(e);
   }
@@ -41,8 +46,8 @@ export function CaseInvestigationBoard({
           <CardTitle className="text-base">{embedded ? "No entities yet" : "Investigation model"}</CardTitle>
           <CardDescription>
             {embedded
-              ? "Categories: Core Actors, Money, Political, Tech, Intel, Convicted, Accusers, Accused, Dead. Data appears after analysis or manual entry."
-              : "Entities populate when you run analysis on evidence. Categories follow this workspace model: Core Actors, Money, Political, Tech, Intel, Convicted, Accusers, Accused, Dead."}
+              ? "Categories: Core Actors, Money, Political, Tech, Intel, Convicted, Accusers, Accused, Victims, Dead. Data appears after analysis or manual entry."
+              : "Entities populate when you run analysis on evidence. Categories follow this workspace model: Core Actors, Money, Political, Tech, Intel, Convicted, Accusers, Accused, Victims, Dead."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -77,12 +82,14 @@ export function CaseInvestigationBoard({
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {INVESTIGATION_CATEGORIES.map((cat) => {
+        {INVESTIGATION_CATEGORY_SLUGS.map((cat) => {
           const list = buckets[cat];
           return (
             <Card key={cat} className="border-border/60 bg-card/60 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium leading-tight">{cat}</CardTitle>
+                <CardTitle className="text-sm font-medium leading-tight">
+                  {INVESTIGATION_CATEGORY_LABELS[cat]}
+                </CardTitle>
                 <CardDescription className="text-xs">{list.length} in this bucket</CardDescription>
               </CardHeader>
               <CardContent className="pt-0">
@@ -114,7 +121,9 @@ export function CaseInvestigationBoard({
         <Card className="border-border/60 bg-muted/20">
           <CardHeader>
             <CardTitle className="text-base">Other / uncategorized</CardTitle>
-            <CardDescription>Entity types that do not match the nine canonical buckets.</CardDescription>
+            <CardDescription>
+              Entity types that do not match one of the canonical investigation categories (including Victims).
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="space-y-2">

@@ -374,8 +374,8 @@ export function CaseIndexWorkspace({
         <CardHeader>
           <CardTitle>Evidence</CardTitle>
           <CardDescription>
-            Add files or import from a link (provide source when possible). Use the case index above to filter this
-            list.
+            Use <span className="font-medium text-foreground">Add evidence</span> for uploads and URL imports (source
+            details on the next screens). Filter this list with the case index above.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">

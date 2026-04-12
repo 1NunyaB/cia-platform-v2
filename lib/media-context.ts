@@ -9,7 +9,7 @@ export function isMediaAnalysisContext(input: {
   if (m.startsWith("image/") || m.startsWith("video/") || m.startsWith("audio/")) {
     return true;
   }
-  if (input.extractionMethod === "ocr_pending") {
+  if (input.extractionMethod === "ocr_pending" || input.extractionMethod === "ocr") {
     return true;
   }
   return false;

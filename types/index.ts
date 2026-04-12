@@ -12,7 +12,7 @@ export type EvidenceProcessingStatus =
   | "analyzing"
   | "complete"
   | "error";
-export type ExtractionMethod = "plain_text" | "pdf_text" | "ocr_pending";
+export type ExtractionMethod = "plain_text" | "pdf_text" | "ocr_pending" | "ocr";
 export type ContributionKind =
   | "note"
   | "comment"
@@ -119,6 +119,11 @@ export type ExtractedText = {
   raw_text: string | null;
   extraction_method: ExtractionMethod;
   created_at: string;
+  /** 0 = full-document text layer; 1+ = OCR page. Omitted when rows are merged for display. */
+  page_number?: number;
+  confidence?: number | null;
+  /** When `getExtractedText` merges multiple DB rows for one file. */
+  page_count?: number;
 };
 
 export type AiAnalysis = {
@@ -128,6 +133,16 @@ export type AiAnalysis = {
   redaction_notes: string | null;
   model: string | null;
   structured: Record<string, unknown> | null;
+  /** Denormalized mirror of structured finding + inquiry metadata */
+  analysis_kind?: string | null;
+  inquiry_prompt?: string | null;
+  full_response_json?: Record<string, unknown> | null;
+  finding_answer?: string | null;
+  confidence_label?: string | null;
+  classification?: string | null;
+  reasoning?: string | null;
+  limitations?: string | null;
+  suggested_next_steps?: string | null;
   created_at: string;
   updated_at: string;
 };

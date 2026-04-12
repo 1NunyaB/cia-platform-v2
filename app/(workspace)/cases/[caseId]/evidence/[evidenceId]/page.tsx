@@ -218,7 +218,8 @@ export default async function EvidenceDetailPage({
         <CardHeader>
           <CardTitle>Extracted text</CardTitle>
           <CardDescription>
-            AI only sees this text — not your original binary file. OCR is stubbed until you connect a provider.
+            AI only sees this text — not your original binary file. Images and scanned PDFs are OCR&apos;d
+            server-side after upload; text-based PDFs use the embedded text layer.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -230,7 +231,9 @@ export default async function EvidenceDetailPage({
             </EvidenceTextSelectionSearch>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No extracted text yet. If this is a scanned PDF, add OCR (TODO in text-extraction-service).
+              No extracted text yet. Wait for processing to finish, or check that the file isn&apos;t blocked. If
+              status is complete but text is empty, the document may be unreadable — try re-uploading a clearer
+              scan.
             </p>
           )}
         </CardContent>

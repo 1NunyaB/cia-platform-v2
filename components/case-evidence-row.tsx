@@ -2,8 +2,7 @@ import Link from "next/link";
 import { AnalyzeButton } from "@/components/analyze-button";
 import { ProcessingBadge } from "@/components/processing-badge";
 import { Badge } from "@/components/ui/badge";
-import type { LatestAnalysisRow } from "@/services/evidence-service";
-import type { EvidenceFile, EvidenceProcessingStatus } from "@/types";
+import type { AiAnalysis, EvidenceFile, EvidenceProcessingStatus } from "@/types";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 
 function truncate(s: string, n: number) {
@@ -21,9 +20,8 @@ export function CaseEvidenceRow({
   caseId: string;
   file: EvidenceFile;
   hasExtractedText: boolean;
-  latestAnalysis?: LatestAnalysisRow;
+  latestAnalysis?: AiAnalysis;
 }) {
-  const analyzing = file.processing_status === "analyzing";
   const primary = evidencePrimaryLabel({
     display_filename: file.display_filename ?? null,
     original_filename: file.original_filename,
@@ -66,13 +64,7 @@ export function CaseEvidenceRow({
         ) : null}
       </div>
       <div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
-        <AnalyzeButton
-          evidenceId={file.id}
-          hasExtractedText={hasExtractedText}
-          isAnalyzing={analyzing}
-          compact
-          variant="secondary"
-        />
+        <AnalyzeButton evidenceId={file.id} />
         <Link
           href={`/cases/${caseId}/evidence/${file.id}`}
           className="text-center text-xs text-primary hover:underline sm:text-right"

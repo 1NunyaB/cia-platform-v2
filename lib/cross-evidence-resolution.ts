@@ -113,12 +113,18 @@ export async function loadEvidenceContentProfiles(
 
   const { data: texts, error: tErr } = await supabase
     .from("extracted_texts")
-    .select("evidence_file_id, raw_text")
-    .in("evidence_file_id", ids);
+    .select("evidence_file_id, raw_text, page_number")
+    .in("evidence_file_id", ids)
+    .order("page_number", { ascending: true });
   if (tErr) throw new Error(tErr.message);
-  const textById = Object.fromEntries(
-    (texts ?? []).map((r) => [r.evidence_file_id as string, (r.raw_text as string) ?? ""]),
-  );
+  const mergedByEvidence = new Map<string, string>();
+  for (const r of texts ?? []) {
+    const eid = r.evidence_file_id as string;
+    const chunk = (r.raw_text as string) ?? "";
+    const prev = mergedByEvidence.get(eid) ?? "";
+    mergedByEvidence.set(eid, prev ? `${prev}\n\n${chunk}` : chunk);
+  }
+  const textById = Object.fromEntries(mergedByEvidence);
 
   const { data: caseEntities, error: ceErr } = await supabase
     .from("entities")
