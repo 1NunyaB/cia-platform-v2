@@ -32,13 +32,13 @@ export function EvidenceTextSelectionSearch({
 
   return (
     <div className="relative space-y-2">
-      <p className="text-[11px] text-zinc-500 flex items-center gap-1.5">
-        <Search className="h-3.5 w-3.5 shrink-0 text-sky-500/80" aria-hidden />
+      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+        <Search className="h-3.5 w-3.5 shrink-0 text-blue-700" aria-hidden />
         Select text below, then search without retyping.
       </p>
       {show ? (
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-md border border-sky-500/35 bg-zinc-950/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm">
-          <span className="text-zinc-400 max-w-[min(100%,14rem)] truncate" title={selection}>
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-xs text-foreground shadow-md">
+          <span className="text-muted-foreground max-w-[min(100%,14rem)] truncate" title={selection}>
             “{selection.slice(0, 80)}
             {selection.length > 80 ? "…" : ""}”
           </span>
@@ -46,13 +46,13 @@ export function EvidenceTextSelectionSearch({
             <>
               <Link
                 href={`/cases/${caseId}/entities?q=${q}`}
-                className="rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-sky-300 hover:bg-zinc-800"
+                className="rounded border border-border bg-document px-2 py-1 text-blue-900 font-medium hover:bg-sky-100"
               >
                 Case — entities & registry
               </Link>
               <Link
                 href={`/cases/${caseId}/timeline?q=${q}`}
-                className="rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-sky-300 hover:bg-zinc-800"
+                className="rounded border border-border bg-document px-2 py-1 text-blue-900 font-medium hover:bg-sky-100"
               >
                 Case — timelines
               </Link>
@@ -60,9 +60,9 @@ export function EvidenceTextSelectionSearch({
           ) : null}
           <Link
             href={`/evidence?q=${q}`}
-            className="rounded border border-sky-600/50 bg-sky-950/50 px-2 py-1 text-sky-200 hover:bg-sky-950/80"
+            className="rounded border border-sky-300 bg-sky-50 px-2 py-1 text-blue-900 font-medium hover:bg-sky-100"
           >
-            All evidence (database)
+            Evidence library
           </Link>
         </div>
       ) : null}

@@ -1,13 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateServiceClient } from "@/lib/supabase/service";
-import { createCase, findRecentDuplicateCaseInWindow } from "@/services/case-service";
+import { createCase, findExistingCaseByNormalizedTitle } from "@/services/case-service";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 const bodySchema = z.object({
   title: z.string().min(1),
   description: z.string().optional().nullable(),
-  visibility: z.enum(["private", "team", "public"]),
+  incident_year: z.number().int().min(1000).max(9999).optional().nullable(),
+  incident_city: z.string().max(200).optional().nullable(),
+  incident_state: z.string().max(100).optional().nullable(),
+  accused_label: z.string().max(500).optional().nullable(),
+  victim_labels: z.string().max(2000).optional().nullable(),
+  known_weapon: z.string().max(500).optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -51,19 +56,24 @@ export async function POST(request: Request) {
   }
 
   try {
-    const duplicateId = await findRecentDuplicateCaseInWindow(privileged, {
+    const existingId = await findExistingCaseByNormalizedTitle(privileged, {
       title: parsed.data.title,
-      visibility: parsed.data.visibility,
     });
-    if (duplicateId) {
-      return NextResponse.json({ id: duplicateId, duplicateSuppressed: true });
+    if (existingId) {
+      return NextResponse.json({ id: existingId, duplicateSuppressed: true });
     }
 
+    const d = parsed.data;
     const { id } = await createCase(supabase, {
       userId: user.id,
-      title: parsed.data.title,
-      description: parsed.data.description,
-      visibility: parsed.data.visibility,
+      title: d.title,
+      description: d.description,
+      incident_year: d.incident_year ?? null,
+      incident_city: d.incident_city?.trim() || null,
+      incident_state: d.incident_state?.trim() || null,
+      accused_label: d.accused_label?.trim() || null,
+      victim_labels: d.victim_labels?.trim() || null,
+      known_weapon: d.known_weapon?.trim() || null,
     });
 
     if (idempotencyKey) {

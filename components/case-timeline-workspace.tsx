@@ -362,7 +362,7 @@ export function CaseTimelineWorkspace({
             className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
               workspaceMode === m.id
                 ? "border-foreground/30 bg-foreground/10 text-foreground"
-                : "border-zinc-700 text-muted-foreground hover:bg-zinc-900/80"
+                : "border-border text-muted-foreground hover:bg-muted"
             }`}
           >
             {m.icon}
@@ -371,7 +371,7 @@ export function CaseTimelineWorkspace({
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground border border-zinc-800 rounded-md px-3 py-2 bg-zinc-950/60">
+      <p className="text-xs text-muted-foreground border border-border rounded-md px-3 py-2 bg-panel">
         {modeButtons.find((x) => x.id === workspaceMode)?.hint}
       </p>
 
@@ -386,8 +386,8 @@ export function CaseTimelineWorkspace({
                 onClick={() => toggleLane(k)}
                 className={`text-xs rounded-md border px-2.5 py-1 transition-colors ${
                   selectedLanes.has(k)
-                    ? `border-zinc-500 bg-zinc-800/90 text-foreground`
-                    : "border-zinc-800 text-muted-foreground hover:bg-zinc-900"
+                    ? `border-primary/50 bg-primary/10 text-foreground`
+                    : "border-border text-muted-foreground hover:bg-muted"
                 }`}
               >
                 <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${TIMELINE_KIND_BG[k]}`} />
@@ -421,7 +421,7 @@ export function CaseTimelineWorkspace({
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_min(100%,380px)] gap-6 items-start">
-        <Card className="border-zinc-800 bg-zinc-950/40">
+        <Card className="border-border bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Calendar</CardTitle>
             <CardDescription className="flex flex-wrap items-center gap-2 text-xs">
@@ -549,7 +549,7 @@ export function CaseTimelineWorkspace({
         </Card>
 
         <aside className="space-y-3 lg:sticky lg:top-4">
-          <Card className="border-zinc-800 bg-zinc-950/40">
+          <Card className="border-border bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Evidence for this window</CardTitle>
               <CardDescription className="text-xs">
@@ -565,7 +565,7 @@ export function CaseTimelineWorkspace({
                 ) : (
                   <ul className="space-y-3 text-sm">
                     {evidencePanelItems.map((item) => (
-                      <li key={item.id} className="rounded-md border border-zinc-800 bg-zinc-900/40 p-2">
+                      <li key={item.id} className="rounded-md border border-border bg-muted/50 p-2">
                         <Link
                           href={`/cases/${caseId}/evidence/${item.id}`}
                           className="font-medium text-sky-400 hover:underline"
@@ -615,7 +615,7 @@ function YearGrid({
               key={y}
               type="button"
               onClick={() => onPickYear(y)}
-              className="rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-4 text-left hover:border-zinc-500 hover:bg-zinc-800/50 transition-colors"
+              className="rounded-lg border border-border bg-panel px-3 py-4 text-left hover:border-primary/40 hover:bg-muted transition-colors"
             >
               <div className="text-lg font-semibold">{y}</div>
               <div className="text-[11px] text-muted-foreground">{counts[y] ?? 0} events</div>
@@ -627,7 +627,7 @@ function YearGrid({
         <button
           type="button"
           onClick={onPickUndated}
-          className="w-full rounded-lg border border-dashed border-zinc-600 px-3 py-3 text-left text-sm text-muted-foreground hover:bg-zinc-900/60"
+          className="w-full rounded-lg border border-dashed border-border px-3 py-3 text-left text-sm text-muted-foreground hover:bg-muted"
         >
           Undated events ({undatedCount}) <ChevronRight className="inline size-4 ml-1" />
         </button>
@@ -658,7 +658,7 @@ function MonthGrid({
             key={m}
             type="button"
             onClick={() => onPickMonth(m)}
-            className="rounded-lg border border-zinc-700 bg-zinc-900/50 px-3 py-3 text-left hover:border-zinc-500 text-sm"
+            className="rounded-lg border border-border bg-panel px-3 py-3 text-left hover:border-primary/40 text-sm"
           >
             {MONTH_NAMES[m]}
           </button>
@@ -688,7 +688,7 @@ function WeekRow({
             key={w}
             type="button"
             onClick={() => onPickWeek(w)}
-            className="rounded-md border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-800"
+            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
           >
             Week {w}
           </button>
@@ -718,7 +718,7 @@ function DayRow({
             key={d}
             type="button"
             onClick={() => onPickDay(d)}
-            className="rounded-md border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-800"
+            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
           >
             Day {d}
           </button>
@@ -793,20 +793,20 @@ function EventList({
         };
 
         return (
-          <li key={ev.id} className={`rounded-lg border border-zinc-800 border-l-4 ${accent} pl-3 pr-3 py-3 bg-zinc-900/30`}>
+          <li key={ev.id} className={`rounded-lg border border-border border-l-4 ${accent} pl-3 pr-3 py-3 bg-panel`}>
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               <span>{ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : "Undated (canonical)"}</span>
-              <span className="border border-zinc-600 rounded px-1.5 py-0.5">{laneLabel(ev)}</span>
+              <span className="rounded border border-border px-1.5 py-0.5">{laneLabel(ev)}</span>
               {tier ? (
                 <span
-                  className={`rounded px-1.5 py-0.5 border ${
+                  className={`rounded border px-1.5 py-0.5 ${
                     tier === "t1_confirmed"
-                      ? "border-emerald-500/50 text-emerald-200/90"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-950"
                       : tier === "t2_supported"
                         ? showCorr
-                          ? "border-amber-500/50 text-amber-100/90"
-                          : "border-sky-500/40 text-sky-100/90"
-                        : "border-zinc-600 text-muted-foreground"
+                          ? "border-amber-300 bg-amber-50 text-amber-950"
+                          : "border-sky-300 bg-sky-50 text-sky-950"
+                        : "border-border text-muted-foreground"
                   }`}
                 >
                   {TIMELINE_TIER_LABELS[tier]}
@@ -828,7 +828,7 @@ function EventList({
                     key={hypVal}
                     type="datetime-local"
                     defaultValue={hypVal}
-                    className="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+                    className="rounded border border-input bg-form-field px-2 py-1 text-xs text-black [color-scheme:light]"
                     disabled={isPending}
                     id={`hyp-${ev.id}`}
                   />
@@ -843,7 +843,7 @@ function EventList({
             ) : null}
 
             {workspaceMode === "theory" && placements[ev.id] ? (
-              <p className="text-[11px] text-amber-200/80 mt-1">
+              <p className="mt-1 text-[11px] text-amber-900">
                 Hypothesis placement: {new Date(placements[ev.id]).toLocaleString()}
               </p>
             ) : null}

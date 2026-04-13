@@ -24,7 +24,7 @@ export function createServiceClient(): AppSupabaseClient {
   const client = tryCreateServiceClient();
   if (!client) {
     throw new Error(
-      "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local (service role is required for the no-auth MVP).",
+      "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local (server-only; use for privileged operations such as idempotency or admin tasks).",
     );
   }
   return client;

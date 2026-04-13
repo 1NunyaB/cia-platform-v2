@@ -2,7 +2,7 @@
 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { SourcePlatformCombobox } from "@/components/source-platform-combobox";
 import {
   EVIDENCE_SOURCE_TYPES,
   EVIDENCE_SOURCE_TYPE_LABELS,
@@ -15,47 +15,44 @@ import {
 export function EvidenceSourceFields({
   idPrefix,
   defaultUrl,
+  defaultPlatform,
   variant = "default",
 }: {
   idPrefix: string;
   /** Prefill URL (e.g. import-from-link). */
   defaultUrl?: string;
+  /** Prefill platform/network (e.g. duplicate upload). */
+  defaultPlatform?: string;
   /** `intake`: light surfaces for the evidence intake flow. */
   variant?: "default" | "intake";
 }) {
-  const shell =
-    variant === "intake"
-      ? "rounded-lg border border-zinc-200 bg-zinc-50 p-4 space-y-4"
-      : "rounded-md border border-zinc-700/80 bg-zinc-900/40 p-3 space-y-3";
+  const shell = "rounded-lg border border-border bg-panel p-4 space-y-4";
   const introTitle = variant === "intake" ? "Source details" : "Source (recommended)";
-  const introBody =
-    variant === "intake" ? (
-      <p className="text-xs text-zinc-600 leading-relaxed">
-        Optional but recommended for search, filters, and audits. Choose the closest type — use{" "}
-        <span className="font-medium text-zinc-800">Unknown</span> only when it cannot be determined.
-      </p>
-    ) : (
-      <p className="text-[11px] text-muted-foreground mt-0.5">
-        Helps the case index, filters, and audits. Choose the closest type — use{" "}
-        <span className="text-zinc-300">Unknown</span> only when it truly cannot be determined.
-      </p>
-    );
+  const introBody = (
+    <p className="text-xs text-muted-foreground leading-relaxed">
+      {variant === "intake" ? (
+        <>
+          Optional but recommended for search, filters, and audits. Choose the closest type — use{" "}
+          <span className="font-medium text-foreground">Unknown</span> only when it cannot be determined.
+        </>
+      ) : (
+        <>
+          Helps the case index, filters, and audits. Choose the closest type — use{" "}
+          <span className="font-medium text-foreground">Unknown</span> only when it truly cannot be determined.
+        </>
+      )}
+    </p>
+  );
   const selectClass =
-    variant === "intake"
-      ? "w-full rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm text-zinc-950"
-      : "w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-foreground";
+    "w-full rounded-md border border-border bg-white px-2 py-2 text-sm text-foreground";
   const inputClass =
-    variant === "intake"
-      ? "bg-white border-zinc-300 text-sm text-zinc-950 placeholder:text-zinc-400"
-      : "bg-zinc-950 border-zinc-700 text-sm";
-  const labelClass = variant === "intake" ? "text-xs text-zinc-800" : "text-xs";
+    "border-input bg-form-field text-sm text-form-field-foreground placeholder:text-form-field-placeholder";
+  const labelClass = "text-xs text-foreground font-medium";
 
   return (
     <div className={shell}>
       <div>
-        <p className={cn("text-xs font-semibold", variant === "intake" ? "text-zinc-900" : "text-foreground")}>
-          {introTitle}
-        </p>
+        <p className="text-xs font-semibold text-foreground">{introTitle}</p>
         {introBody}
       </div>
       <div className="space-y-2">
@@ -84,12 +81,14 @@ export function EvidenceSourceFields({
           <Label htmlFor={`${idPrefix}-platform`} className={labelClass}>
             Platform / network
           </Label>
-          <Input
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Search existing networks or type a new one — matches are saved for next time.
+          </p>
+          <SourcePlatformCombobox
             id={`${idPrefix}-platform`}
             name="source_platform"
-            placeholder="e.g. CNN, YouTube, C-SPAN, X"
-            className={inputClass}
-            autoComplete="off"
+            variant={variant}
+            defaultValue={defaultPlatform}
           />
         </div>
         <div className="space-y-2">

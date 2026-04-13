@@ -22,6 +22,10 @@ export type DuplicateEvidenceMatch = {
   display_filename: string | null;
   short_alias: string | null;
   case_id: string | null;
+  /** Present when returned from `findDuplicateEvidence` / guest duplicate lookup. */
+  processing_status?: string | null;
+  mime_type?: string | null;
+  error_message?: string | null;
 };
 
 /** Same bytes (or weak filename+size match) already stored — see `findDuplicateEvidence`. */

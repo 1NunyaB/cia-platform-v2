@@ -62,13 +62,13 @@ export function EvidenceClusterBlock({
   }
 
   return (
-    <li className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 text-sm text-foreground space-y-3">
+    <li className="rounded-lg border border-border bg-panel p-4 text-sm text-foreground space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2 gap-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-foreground">{cluster.title ?? "Untitled cluster"}</span>
           {cluster.cluster_kind === "alias_focused" ? (
             <span
-              className="text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded border border-amber-500/40 text-amber-400/95 bg-amber-500/5"
+              className="text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded border border-amber-300 text-amber-950 bg-amber-50"
               title="Cluster driven primarily by identity / alias linkage across sources"
             >
               Alias-focused
@@ -100,14 +100,14 @@ export function EvidenceClusterBlock({
               <Link
                 href={`/cases/${caseId}/evidence/${eid}`}
                 title={aliasTrace ? "Member linked via alias-resolution clustering" : undefined}
-                className="inline-flex rounded border border-zinc-700/80 bg-zinc-900/50 px-2 py-1 text-xs text-sky-400 hover:bg-zinc-800 hover:underline"
+                className="inline-flex rounded border border-border bg-white px-2 py-1 text-xs text-blue-900 font-medium hover:bg-sky-50 hover:underline"
               >
                 {displayLabel}
                 {shortAlias ? (
-                  <span className="ml-1 text-zinc-500 font-normal">· {shortAlias}</span>
+                  <span className="ml-1 text-muted-foreground font-normal">· {shortAlias}</span>
                 ) : null}
                 {aliasTrace ? (
-                  <span className="ml-1 text-[10px] text-amber-400/90" aria-hidden>
+                  <span className="ml-1 text-[10px] text-amber-900" aria-hidden>
                     · alias
                   </span>
                 ) : null}
@@ -121,7 +121,7 @@ export function EvidenceClusterBlock({
           type="button"
           size="sm"
           variant="secondary"
-          className="bg-zinc-800 text-foreground border border-zinc-700"
+          className="border-border"
           disabled={loading}
           onClick={() => void runAnalyze()}
         >
@@ -134,10 +134,10 @@ export function EvidenceClusterBlock({
             "Analyze cluster"
           )}
         </Button>
-        {error ? <span className="text-xs text-red-400">{error}</span> : null}
+        {error ? <span className="text-xs text-alert-foreground font-medium">{error}</span> : null}
       </div>
       {analysis ? (
-        <div className="pt-2 border-t border-zinc-800/90 space-y-4">
+        <div className="pt-2 border-t border-border space-y-4">
           <AnalysisFindingPanel
             finding={analysis.finding}
             authenticityLabel={analysis.authenticityLabel}

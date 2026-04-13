@@ -33,7 +33,7 @@ function valueForSection(
 }
 
 /**
- * Default visible analysis: seven fields in fixed order (from STRUCTURED_FINDING_SECTIONS). Dark investigation surface.
+ * Default visible analysis: seven fields in fixed order (from STRUCTURED_FINDING_SECTIONS).
  */
 export function AnalysisFindingPanel({
   finding,
@@ -49,12 +49,12 @@ export function AnalysisFindingPanel({
 
   return (
     <div
-      className="rounded-xl border border-zinc-800 bg-zinc-950 text-foreground shadow-inner"
+      className="rounded-xl border border-border bg-card text-foreground shadow-inner"
       role="region"
       aria-label="Structured analysis finding"
     >
       {showAuthStrip ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/90 px-4 py-2.5 bg-zinc-900/40">
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-panel px-4 py-2.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mr-1">
             Labels
           </span>
@@ -64,11 +64,11 @@ export function AnalysisFindingPanel({
         </div>
       ) : null}
       {authenticityNotes?.trim() ? (
-        <p className="text-xs text-muted-foreground border-b border-zinc-800/80 px-4 py-2 whitespace-pre-wrap leading-relaxed">
+        <p className="border-b border-border px-4 py-2 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
           {authenticityNotes.trim()}
         </p>
       ) : null}
-      <dl className="divide-y divide-zinc-800/90">
+      <dl className="divide-y divide-border">
         {STRUCTURED_FINDING_SECTIONS.map((row, i) => {
           const last = i === STRUCTURED_FINDING_SECTIONS.length - 1;
           const emphasized = row.variant === "emphasis";

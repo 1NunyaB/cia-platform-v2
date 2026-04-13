@@ -25,7 +25,7 @@ export function RedactionAnalysisPanel({ detail }: { detail: RedactionAnalysisDe
           withheld text.
         </p>
       </div>
-      <dl className="divide-y divide-zinc-800/80">
+      <dl className="divide-y divide-border">
         {ROWS.map((row) => (
           <div key={row.key} className="px-4 py-3 sm:grid sm:grid-cols-[minmax(0,12rem)_1fr] sm:gap-4">
             <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{row.label}</dt>

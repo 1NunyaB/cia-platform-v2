@@ -5,6 +5,7 @@ import { getCaseById } from "@/services/case-service";
 import { normalizeTimelineKind } from "@/lib/timeline-kind-schema";
 import { detectTimelineConflicts } from "@/lib/timeline-conflicts";
 import { listTheoryPlacementsForUser } from "@/services/timeline-theory-service";
+import { logActivity } from "@/services/activity-service";
 import type { TimelineKind } from "@/types/analysis";
 import {
   CaseTimelineWorkspace,
@@ -40,15 +41,44 @@ export default async function CaseTimelinePage({
   searchParams,
 }: {
   params: Promise<{ caseId: string }>;
-  searchParams: Promise<{ q?: string; kind?: string; compare?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    kind?: string;
+    compare?: string;
+    year?: string;
+    month?: string;
+    week?: string;
+    customLane?: string;
+  }>;
 }) {
   const { caseId } = await params;
-  const { q, kind: kindRaw, compare: compareRaw } = await searchParams;
+  const { q, kind: kindRaw, compare: compareRaw, year, month, week, customLane } = await searchParams;
   const supabase = await createClient();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (user && (year?.trim() || month?.trim() || week?.trim())) {
+    try {
+      await logActivity(supabase, {
+        caseId,
+        actorId: user.id,
+        actorLabel: "Analyst",
+        action: "timeline.drilldown",
+        entityType: "timeline",
+        entityId: caseId,
+        payload: {
+          year: year?.trim() || null,
+          month: month?.trim() || null,
+          week: week?.trim() || null,
+          kind: kindRaw ?? null,
+        },
+      });
+    } catch {
+      /* non-blocking */
+    }
+  }
 
   const c = await getCaseById(supabase, caseId);
   if (!c) notFound();
@@ -95,16 +125,40 @@ export default async function CaseTimelinePage({
 
   const rawList = (events ?? []) as unknown as TimelineRow[];
   const needle = (q ?? "").trim().toLowerCase();
-  const textFiltered = needle
+  let timelineFiltered = needle
     ? rawList.filter((ev) => {
         const blob = `${ev.title}\n${ev.summary ?? ""}\n${ev.occurred_at ?? ""}\n${ev.source_label ?? ""}\n${ev.event_classification ?? ""}`.toLowerCase();
         return blob.includes(needle);
       })
     : rawList;
 
-  textFiltered.sort(sortByOccurred);
+  if (year?.trim()) {
+    const y = year.trim();
+    timelineFiltered = timelineFiltered.filter((ev) => String(ev.occurred_at ?? "").startsWith(y));
+  }
+  if (month?.trim()) {
+    const m = month.trim();
+    timelineFiltered = timelineFiltered.filter((ev) => String(ev.occurred_at ?? "").startsWith(m));
+  }
+  if (week?.trim()) {
+    const wk = week.trim().toUpperCase();
+    timelineFiltered = timelineFiltered.filter((ev) => {
+      if (!ev.occurred_at) return false;
+      const d = new Date(ev.occurred_at);
+      if (Number.isNaN(d.getTime())) return false;
+      return isoWeekKey(d) === wk;
+    });
+  }
+  if (customLane?.trim()) {
+    const lane = customLane.trim().toLowerCase();
+    timelineFiltered = timelineFiltered.filter(
+      (ev) => normalizeTimelineKind(ev.timeline_kind) === "custom" && String(ev.custom_lane_label ?? "").toLowerCase() === lane,
+    );
+  }
 
-  const conflictInputs = textFiltered
+  timelineFiltered.sort(sortByOccurred);
+
+  const conflictInputs = timelineFiltered
     .filter((ev) => (ev.timeline_kind ?? "evidence") !== "reconstructed")
     .map((ev) => ({
       id: ev.id,
@@ -151,7 +205,7 @@ export default async function CaseTimelinePage({
         caseId={caseId}
         caseTitle={c.title}
         userId={user?.id ?? null}
-        events={textFiltered}
+        events={timelineFiltered}
         conflicts={conflictSignals}
         initialPlacements={placements}
         initialSelectedLanes={initialSelectedLanes}
@@ -159,4 +213,13 @@ export default async function CaseTimelinePage({
       />
     </div>
   );
+}
+
+function isoWeekKey(d: Date): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }

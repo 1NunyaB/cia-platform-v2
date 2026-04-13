@@ -22,11 +22,12 @@ export function CopyInlineButton({ text, label }: { text: string; label: string 
       type="button"
       variant="ghost"
       size="sm"
-      className="h-7 px-2 text-xs text-zinc-400 hover:text-sky-400"
+      title="Copies an internal workspace identifier — not a public share link."
+      className="h-7 px-2 text-xs text-foreground hover:text-primary"
       onClick={() => void copy()}
       aria-label={label}
     >
-      {done ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+      {done ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
     </Button>
   );
 }

@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCaseById, getCaseMembers } from "@/services/case-service";
+import type { CaseRow } from "@/types";
 import {
   getEvidenceCaseMembershipCounts,
+  getEvidenceContentDuplicatePeerFlags,
   getEvidenceForCase,
   getEvidenceHasAiAnalysisMap,
+  getEvidenceViewedSet,
 } from "@/services/evidence-service";
 import { getCaseIndexSnapshot } from "@/services/case-index-service";
 import { listEvidenceClustersForCase } from "@/services/case-investigation-query";
@@ -16,6 +19,7 @@ import { listNotesForCase, listCommentsForCase, listActivity } from "@/services/
 import { listClusterAnalysesForCase } from "@/services/collaboration-service";
 import { buildCommentTree } from "@/lib/comment-threading";
 import { CommentThreadView } from "@/components/comment-thread-view";
+import { AuthorPersonaLine } from "@/components/author-persona-line";
 import { CASE_NOTE_VISIBILITY_LABELS, type CaseNoteVisibility } from "@/types/collaboration";
 import { fetchProfilesByIds } from "@/lib/profiles";
 import { CaseEvidenceAddPanel } from "@/components/case-evidence-add-panel";
@@ -25,10 +29,14 @@ import { InvestigationActionsPanel } from "@/components/investigation-actions-pa
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import { CaseRecordMetaLine } from "@/components/case-record-meta-line";
 
 export default async function CaseDetailPage({ params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const c = await getCaseById(supabase, caseId);
   if (!c) notFound();
@@ -66,9 +74,17 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
   const firstEvidenceId = evidence[0]?.id ? String(evidence[0].id) : null;
 
   const evidenceIds = evidence.map((row) => String(row.id));
-  const [membershipCounts, hasAiMap] = await Promise.all([
+  const evidenceRowsForDup = evidence.map((row) => ({
+    id: String(row.id),
+    content_sha256: (row.content_sha256 as string | null) ?? null,
+  }));
+  const [membershipCounts, hasAiMap, viewedSet, dupFlags] = await Promise.all([
     getEvidenceCaseMembershipCounts(supabase, evidenceIds),
     getEvidenceHasAiAnalysisMap(supabase, evidenceIds),
+    user ? getEvidenceViewedSet(supabase, user.id, evidenceIds) : Promise.resolve(new Set<string>()),
+    user
+      ? getEvidenceContentDuplicatePeerFlags(supabase, { userId: user.id }, evidenceRowsForDup)
+      : Promise.resolve(new Map<string, boolean>()),
   ]);
 
   const evidenceIndexRows = evidence.map((row) => ({
@@ -76,6 +92,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
     case_id: row.case_id != null ? String(row.case_id) : null,
     case_membership_count: membershipCounts.get(String(row.id)) ?? 0,
     has_ai_analysis: hasAiMap.get(String(row.id)) ?? false,
+    viewed: user ? viewedSet.has(String(row.id)) : false,
+    has_content_duplicate_peer: dupFlags.get(String(row.id)) ?? false,
+    extraction_status: (row as { extraction_status?: string | null }).extraction_status ?? null,
     original_filename: String(row.original_filename),
     display_filename: row.display_filename != null ? String(row.display_filename) : null,
     short_alias: row.short_alias != null ? String(row.short_alias) : null,
@@ -104,12 +123,20 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
             </Link>
           </p>
           <h1 className="text-2xl font-semibold tracking-tight mt-1">{c.title}</h1>
-          {c.description ? <p className="text-muted-foreground mt-2 max-w-2xl">{c.description}</p> : null}
-          <p className="text-xs text-muted-foreground mt-2">Visibility: {c.visibility}</p>
+          <CaseRecordMetaLine caseRow={c as CaseRow} />
+          {c.description ? <p className="mt-2 max-w-2xl text-foreground">{c.description}</p> : null}
+          <p className="mt-2 max-w-2xl text-xs leading-relaxed text-foreground">
+            Shared investigation in this workspace. Uploading evidence <em>to this case</em>, case notes, and threaded
+            comments require sign-in: Supabase Row Level Security only grants those writes to authenticated members, and
+            your account id is stored for audit. Guests can still use the separate evidence library when it is enabled.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/cases/${caseId}/entities`}>Entities</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/cases/${caseId}/timelines`}>Timelines</Link>
           </Button>
           <Button variant="outline" size="sm" asChild>
             <Link href={`/cases/${caseId}/timeline`}>Timeline</Link>
@@ -160,7 +187,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
           <CardDescription>Notes attached to this case (not a specific file).</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <CaseNoteForm caseId={caseId} caseIsPublic={c.visibility === "public"} />
+          <CaseNoteForm caseId={caseId} caseIsPublic />
           {notes.length === 0 ? (
             <p className="text-sm text-muted-foreground">No case notes yet.</p>
           ) : (
@@ -170,8 +197,11 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
                 return (
                   <li key={n.id} className="rounded-md border p-3 text-sm">
                     <p className="text-xs text-muted-foreground mb-1 flex flex-wrap gap-2 items-center">
-                      <span>
-                        {profiles[n.author_id as string]?.display_name ?? n.author_id}{" "}
+                      <span className="flex flex-wrap items-center gap-1.5 min-w-0">
+                        <AuthorPersonaLine
+                          profile={profiles[n.author_id as string]}
+                          fallbackId={n.author_id as string}
+                        />
                         <span className="text-muted-foreground/70">
                           {new Date(n.created_at as string).toLocaleString()}
                         </span>
@@ -199,7 +229,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
             caseId={caseId}
             evidenceFileId={null}
             roots={caseCommentRoots}
-            profileName={(id) => (id ? profiles[id]?.display_name ?? id : "Analyst")}
+            getProfile={(id) => (id ? profiles[id] : undefined)}
           />
         </CardContent>
       </Card>

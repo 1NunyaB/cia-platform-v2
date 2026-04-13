@@ -5,24 +5,11 @@ import {
 } from "@/prompts/investigation-case-actions";
 import { normalizeStructuredFinding, structuredFindingSchema } from "@/lib/schemas/structured-finding";
 import type { AppSupabaseClient } from "@/types";
-import { getEvidenceForCase, getExtractedText } from "@/services/evidence-service";
-import {
-  listEntitiesWithCategories,
-  listEvidenceClustersForCase,
-} from "@/services/case-investigation-query";
+import { buildInvestigationUserContentBlock } from "@/services/case-investigation-context-blocks";
 import { enforceFindingDiscipline, enforceSearchCorrelationDiscipline } from "@/services/analysis-finding-validation";
 import type { AnalysisPipelineContext } from "@/lib/analysis-priority-doctrine";
 import { logActivity } from "@/services/activity-service";
 import type { StructuredFinding } from "@/types/analysis";
-
-const MAX_FILES = 14;
-const MAX_CHARS_PER_FILE = 9000;
-
-function truncate(s: string, max: number): string {
-  const t = s.trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, max)}\n\n[…truncated for length]`;
-}
 
 /**
  * Loads evidence extracts, entities, and cluster summaries for a case-level AI pass.
@@ -33,68 +20,12 @@ export async function runCaseInvestigationAction(
 ): Promise<{ finding: StructuredFinding }> {
   const { caseId, userId, action } = input;
 
-  const files = await getEvidenceForCase(supabase, caseId);
-  const slice = files.slice(0, MAX_FILES);
+  const { userContent, hasExtracts } = await buildInvestigationUserContentBlock(supabase, caseId, {
+    maxFiles: 14,
+    maxCharsPerFile: 9000,
+  });
 
-  const extracts: { id: string; filename: string; text: string }[] = [];
-  for (const row of slice) {
-    const id = row.id as string;
-    const fn = (row.original_filename as string) ?? id;
-    const ex = await getExtractedText(supabase, id);
-    const raw = (ex?.raw_text as string) ?? "";
-    if (raw.trim()) {
-      extracts.push({ id, filename: fn, text: truncate(raw, MAX_CHARS_PER_FILE) });
-    }
-  }
-
-  const entities = await listEntitiesWithCategories(supabase, caseId);
-  const clusters = await listEvidenceClustersForCase(supabase, caseId);
-
-  const entityBlock =
-    entities.length === 0
-      ? "(No entities stored for this case yet.)"
-      : entities
-          .map((e) => {
-            const cats = (e.entity_categories ?? []).map((c) => c.category).join(", ");
-            return `- ${e.label} | type: ${e.entity_type ?? "—"} | categories: ${cats || "—"}`;
-          })
-          .join("\n");
-
-  const clusterBlock =
-    clusters.length === 0
-      ? "(No evidence clusters stored yet — run per-file analysis with cluster hints to populate.)"
-      : clusters
-          .map((cl) => {
-            const names = (cl.evidence_cluster_members ?? [])
-              .map((m) => m.evidence_files?.original_filename ?? m.evidence_file_id)
-              .join("; ");
-            return `- ${cl.title ?? "Cluster"}: ${cl.rationale ?? "—"} | linked files: ${names || "—"}`;
-          })
-          .join("\n");
-
-  const evidenceBlock =
-    extracts.length === 0
-      ? "NO EXTRACTED TEXT AVAILABLE for any file in this case."
-      : extracts
-          .map(
-            (x) =>
-              `--- FILE: ${x.filename} (id: ${x.id})\n${x.text}`,
-          )
-          .join("\n\n");
-
-  const userContent = `CASE ID: ${caseId}
-
-=== ENTITY REGISTRY (canonical labels) ===
-${entityBlock}
-
-=== EVIDENCE CLUSTERS (if any) ===
-${clusterBlock}
-
-=== EXTRACTED TEXT BY FILE ===
-${evidenceBlock}
-`;
-
-  if (extracts.length === 0) {
+  if (!hasExtracts) {
     const weak: StructuredFinding = {
       finding_answer:
         "No extracted text is available across case files — case-level analysis cannot cite document content.",

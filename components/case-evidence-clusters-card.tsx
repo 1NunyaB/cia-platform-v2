@@ -16,9 +16,9 @@ export function CaseEvidenceClustersCard({
   return (
     <Card
       id="evidence-clusters"
-      className="border-zinc-800 bg-zinc-950/80 shadow-lg ring-1 ring-zinc-800/80"
+      className="border-border bg-white shadow-md"
     >
-      <CardHeader className="border-b border-zinc-800/90 pb-3">
+      <CardHeader className="border-b border-border pb-3">
         <CardTitle className="text-lg tracking-tight text-foreground">Linked Evidence Clusters</CardTitle>
         <CardDescription className="text-muted-foreground text-sm">
           Shared for this case — groupings from AI analysis that link related files. Run &quot;Analyze cluster&quot;

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ContextualTimeInference, TimelineKind, TimelineTier } from "@/types/analysis";
 
+/** Stored on each row for RLS; new cases are always `"public"` (shared investigations). */
 export type CaseVisibility = "private" | "team" | "public";
 export type CaseMemberRole = "owner" | "admin" | "contributor" | "viewer";
 export type EvidenceProcessingStatus =
@@ -63,12 +64,30 @@ export {
   normalizeClassification,
 } from "@/types/analysis";
 
+/** Stored on `profiles`; opt-in persona for the Investigators wall and in-app stamps. */
+export type InvestigatorPersonaFields = {
+  investigator_opt_in: boolean;
+  investigator_alias: string | null;
+  investigator_avatar_url: string | null;
+  investigator_tagline: string | null;
+};
+
 export type Profile = {
   id: string;
   display_name: string | null;
   avatar_url: string | null;
   created_at: string;
-};
+} & Partial<InvestigatorPersonaFields>;
+
+/** Extraction outcome on `evidence_files` (orthogonal to `processing_status` in several paths). */
+export type EvidenceExtractionStatus =
+  | "pending"
+  | "ok"
+  | "failed"
+  | "unavailable"
+  | "retry_needed"
+  | "limited"
+  | "low_confidence";
 
 export type CaseRow = {
   id: string;
@@ -78,6 +97,13 @@ export type CaseRow = {
   created_by: string;
   created_at: string;
   updated_at: string;
+  /** Structured incident fields (nullable for legacy rows). */
+  incident_year?: number | null;
+  incident_city?: string | null;
+  incident_state?: string | null;
+  accused_label?: string | null;
+  victim_labels?: string | null;
+  known_weapon?: string | null;
 };
 
 export type CaseMember = {
@@ -89,17 +115,37 @@ export type CaseMember = {
   created_at: string;
 };
 
+/** Ingest path for internal audit (`evidence_upload_audit`); not shown on default evidence surfaces. */
+export type EvidenceUploadMethod = "single_file" | "bulk" | "url_import";
+
+/** Internal audit row — RLS blocks SELECT for authenticated users; inspect via service_role / admin tooling. */
+export type EvidenceUploadAuditRow = {
+  evidence_file_id: string;
+  uploaded_by: string | null;
+  guest_session_id?: string | null;
+  uploader_ip: string | null;
+  user_agent: string | null;
+  upload_method: EvidenceUploadMethod | null;
+  created_at: string;
+};
+
 export type EvidenceFile = {
   id: string;
   /** Null while the file lives in the uploader's library before case assignment. */
   case_id: string | null;
-  uploaded_by: string;
+  /** Signed-in uploader; null for guest-owned library rows (see guest_session_id). */
+  uploaded_by: string | null;
+  /** Anonymous session owner when uploaded_by is null. */
+  guest_session_id?: string | null;
   storage_path: string;
   original_filename: string;
   mime_type: string | null;
   file_size: number | null;
   processing_status: EvidenceProcessingStatus;
   error_message: string | null;
+  /** Text extraction outcome; file may still be stored when not `ok`. */
+  extraction_status?: EvidenceExtractionStatus | string | null;
+  extraction_user_message?: string | null;
   created_at: string;
   /** Case-scoped sequence; stable after creation. */
   file_sequence_number?: number;

@@ -28,7 +28,7 @@ export async function POST(
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Assignment failed";
-    const status = message.includes("not found") ? 404 : message.includes("Only the uploader") ? 403 : 400;
+    const status = message.includes("not found") ? 404 : message.includes("Forbidden") ? 403 : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

@@ -262,7 +262,10 @@ export async function runAiAnalysisForEvidence(
     evidenceId: string;
     /** Null when analyzing library evidence not yet assigned to a case (no graph persistence). */
     caseId: string | null;
-    userId: string;
+    /** Signed-in user; null for guest-owned library evidence. */
+    userId: string | null;
+    /** When set, library activity logs use guest attribution. */
+    guestSessionId?: string | null;
     extractedText: string;
   },
 ): Promise<{ analysisId: string }> {
@@ -288,7 +291,10 @@ export async function runAiAnalysisForEvidence(
       },
     };
     return persistAnalysis(supabase, {
-      ...input,
+      evidenceId: input.evidenceId,
+      caseId: input.caseId,
+      userId: input.userId,
+      guestSessionId: input.guestSessionId,
       model: "none",
       summary: finding.finding_answer,
       redactionNotes: null,
@@ -383,7 +389,10 @@ export async function runAiAnalysisForEvidence(
   };
 
   return persistAnalysis(supabase, {
-    ...input,
+    evidenceId: input.evidenceId,
+    caseId: input.caseId,
+    userId: input.userId,
+    guestSessionId: input.guestSessionId,
     model,
     summary: finding.finding_answer,
     redactionNotes: null,
@@ -397,7 +406,8 @@ async function persistAnalysis(
   args: {
     evidenceId: string;
     caseId: string | null;
-    userId: string;
+    userId: string | null;
+    guestSessionId?: string | null;
     model: string;
     summary: string;
     redactionNotes: string | null;
@@ -405,8 +415,17 @@ async function persistAnalysis(
     supplementalForGraph: AnalysisSupplemental;
   },
 ): Promise<{ analysisId: string }> {
-  const { evidenceId, caseId, userId, model, summary, redactionNotes, structured, supplementalForGraph } =
-    args;
+  const {
+    evidenceId,
+    caseId,
+    userId,
+    guestSessionId,
+    model,
+    summary,
+    redactionNotes,
+    structured,
+    supplementalForGraph,
+  } = args;
 
   await clearInvestigationArtifactsForEvidence(supabase, evidenceId, caseId);
 
@@ -443,12 +462,17 @@ async function persistAnalysis(
     await updateEvidenceStatus(supabase, evidenceId, "complete");
     await logActivity(supabase, {
       caseId: null,
-      actorId: userId,
-      actorLabel: "System",
+      actorId: guestSessionId ? null : userId,
+      actorLabel: guestSessionId ? "Guest" : "System",
       action: "evidence.analyzed",
       entityType: "ai_analysis",
       entityId: analysisId,
-      payload: { evidence_file_id: evidenceId, model, library: true },
+      payload: {
+        evidence_file_id: evidenceId,
+        model,
+        library: true,
+        ...(guestSessionId ? { guest_session_id: guestSessionId } : {}),
+      },
     });
     return { analysisId };
   }
@@ -497,12 +521,14 @@ async function persistAnalysis(
 
   await updateEvidenceStatus(supabase, evidenceId, "complete");
 
-  await recordContribution(supabase, {
-    caseId,
-    userId,
-    kind: "analysis_run",
-    refId: analysisId,
-  });
+  if (userId) {
+    await recordContribution(supabase, {
+      caseId,
+      userId,
+      kind: "analysis_run",
+      refId: analysisId,
+    });
+  }
 
   await logActivity(supabase, {
     caseId,

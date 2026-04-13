@@ -19,14 +19,14 @@ export function AnalysisSupplementalPanel({ supplemental }: { supplemental: Anal
 
   if (!has) {
     return (
-      <p className="text-xs text-muted-foreground border border-zinc-800 rounded-lg px-3 py-2 bg-zinc-950/80">
+      <p className="text-xs text-muted-foreground border border-border rounded-lg px-3 py-2 bg-panel">
         No supplemental graph data in this run (entities, timeline, relationships, clusters, or links).
       </p>
     );
   }
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 text-foreground text-sm space-y-4 p-4">
+    <div className="rounded-xl border border-border bg-white text-foreground text-sm space-y-4 p-4 shadow-sm">
       {supplemental.entities.length > 0 ? (
         <section>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Entities</h4>
@@ -36,7 +36,7 @@ export function AnalysisSupplementalPanel({ supplemental }: { supplemental: Anal
                 .map((c) => normalizeCategoryToken(c))
                 .filter((c): c is InvestigationCategorySlug => c != null);
               return (
-                <li key={i} className="border border-zinc-800 rounded-md px-3 py-2 space-y-2">
+                <li key={i} className="border border-border rounded-md px-3 py-2 space-y-2">
                   <div>
                     <span className="font-medium text-foreground">{e.label}</span>{" "}
                     <span className="text-muted-foreground">({e.entity_type})</span>
@@ -53,16 +53,16 @@ export function AnalysisSupplementalPanel({ supplemental }: { supplemental: Anal
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Timeline</h4>
           <ul className="space-y-2">
             {supplemental.timeline.map((t, i) => (
-              <li key={i} className="border border-zinc-800 rounded-md px-3 py-2">
+              <li key={i} className="border border-border rounded-md px-3 py-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{t.title}</span>
                   {t.timeline_kind_resolved ? (
-                    <span className="text-[10px] font-medium uppercase tracking-wide border border-violet-500/40 text-violet-200/90 rounded px-1.5 py-0.5">
+                    <span className="text-[10px] font-medium uppercase tracking-wide border border-violet-300 text-violet-900 bg-violet-50 rounded px-1.5 py-0.5">
                       {TIMELINE_KIND_LABELS[t.timeline_kind_resolved]}
                     </span>
                   ) : null}
                   {t.timeline_tier_resolved ? (
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-zinc-700 rounded px-1.5 py-0.5">
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border rounded px-1.5 py-0.5 bg-panel">
                       {TIMELINE_TIER_LABELS[t.timeline_tier_resolved]}
                     </span>
                   ) : null}
@@ -87,7 +87,7 @@ export function AnalysisSupplementalPanel({ supplemental }: { supplemental: Anal
           </h4>
           <ul className="space-y-2">
             {supplemental.relationships.map((r, i) => (
-              <li key={i} className="border border-zinc-800 rounded-md px-3 py-2 text-sm">
+              <li key={i} className="border border-border rounded-md px-3 py-2 text-sm">
                 {r.source_label} → {r.target_label}{" "}
                 <span className="text-muted-foreground">({r.relation_type})</span>
                 {r.description ? <p className="text-muted-foreground mt-1">{r.description}</p> : null}
@@ -103,7 +103,7 @@ export function AnalysisSupplementalPanel({ supplemental }: { supplemental: Anal
           </h4>
           <ul className="space-y-2">
             {supplemental.evidence_clusters!.map((c, i) => (
-              <li key={i} className="border border-zinc-800 rounded-md px-3 py-2 text-xs">
+              <li key={i} className="border border-border rounded-md px-3 py-2 text-xs">
                 <div className="font-medium text-foreground">{c.title ?? "Cluster"}</div>
                 {c.rationale ? <p className="text-muted-foreground mt-1">{c.rationale}</p> : null}
                 <p className="text-muted-foreground mt-1">

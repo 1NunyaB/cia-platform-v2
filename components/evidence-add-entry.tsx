@@ -21,17 +21,17 @@ export function EvidenceAddEntry({
   const href = mode === "library" ? "/evidence/add" : `/cases/${caseId}/evidence/add`;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 text-zinc-950 shadow-sm">
+    <div className="rounded-xl border border-border bg-white p-5 text-foreground shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-zinc-950">Add evidence</h3>
+          <h3 className="text-sm font-semibold text-foreground">Add evidence</h3>
           <p className="mt-1 text-xs text-zinc-600 leading-relaxed">
             {mode === "library"
               ? "Open the intake flow to upload or import into your library. Assign files to a case later."
               : "Upload files or import from a URL on dedicated screens — less clutter, same validation and storage."}
           </p>
         </div>
-        <Button asChild className="shrink-0 bg-zinc-950 text-white hover:bg-zinc-800">
+        <Button asChild className="shrink-0">
           <Link href={href}>
             <FilePlus className="mr-2 h-4 w-4" aria-hidden />
             Add evidence

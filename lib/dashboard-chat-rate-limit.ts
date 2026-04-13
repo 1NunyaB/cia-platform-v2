@@ -9,6 +9,28 @@ export type DashboardChatRateDeny = { allowed: false; message: string };
 export type DashboardChatRateResult = DashboardChatRateOk | DashboardChatRateDeny;
 
 /**
+ * Basic automated moderation (in addition to rate limits below).
+ */
+export function moderateDashboardChatContent(body: string): { ok: true; trimmed: string } | { ok: false; message: string } {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return { ok: false, message: "Message cannot be empty." };
+  }
+  if (/^(.)\1{30,}$/m.test(trimmed)) {
+    return { ok: false, message: "Message looks like spam (repeated characters)." };
+  }
+  const letters = trimmed.replace(/[\s\d\W]/g, "").length;
+  if (trimmed.length > 12 && letters < 2) {
+    return { ok: false, message: "Add a bit more readable text (not only symbols or numbers)." };
+  }
+  const urlCount = (trimmed.match(/https?:\/\/\S+/gi) ?? []).length;
+  if (urlCount > 12) {
+    return { ok: false, message: "Too many links in one message. Split across multiple posts." };
+  }
+  return { ok: true, trimmed };
+}
+
+/**
  * Duplicate detection, burst cooldown (3 posts within ~3s → 30s lockout), length.
  */
 export async function checkDashboardChatRate(
@@ -16,7 +38,11 @@ export async function checkDashboardChatRate(
   userId: string,
   body: string,
 ): Promise<DashboardChatRateResult> {
-  const trimmed = body.trim();
+  const mod = moderateDashboardChatContent(body);
+  if (!mod.ok) {
+    return { allowed: false, message: mod.message };
+  }
+  const trimmed = mod.trimmed;
   if (!trimmed) {
     return { allowed: false, message: "Message cannot be empty." };
   }

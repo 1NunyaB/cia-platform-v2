@@ -43,23 +43,23 @@ export const EVIDENCE_MARKER_STYLES: Record<
   { dot: string; label: string }
 > = {
   unassigned: {
-    dot: "bg-zinc-500 shadow-[0_0_0_1px_rgba(255,255,255,0.08)]",
+    dot: "bg-zinc-600 shadow-[0_0_0_1px_rgba(0,0,0,0.14)]",
     label: "Not assigned to a case",
   },
   in_case: {
-    dot: "bg-sky-500 shadow-[0_0_0_1px_rgba(56,189,248,0.35)]",
+    dot: "bg-sky-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
     label: "Included in a case",
   },
   multi_case: {
-    dot: "bg-violet-500 shadow-[0_0_0_1px_rgba(167,139,250,0.4)]",
+    dot: "bg-violet-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
     label: "Linked to more than one case",
   },
   analyzed: {
-    dot: "bg-emerald-500 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]",
+    dot: "bg-emerald-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
     label: "AI analysis available",
   },
   problem: {
-    dot: "bg-red-500 shadow-[0_0_0_1px_rgba(248,113,113,0.4)]",
+    dot: "bg-red-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
     label: "Blocked, failed, or needs attention",
   },
 };

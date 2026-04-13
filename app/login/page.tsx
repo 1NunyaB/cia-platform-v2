@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ContinueAsGuestButton } from "@/components/continue-as-guest-button";
 
 function LoginForm() {
   const router = useRouter();
@@ -75,6 +76,25 @@ function LoginForm() {
               {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
+          <div className="mt-6 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+            <ContinueAsGuestButton
+              nextHref={next}
+              className="w-full"
+              label="Continue without account"
+            />
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Guest access may be logged with technical identifiers such as IP address and browser or device metadata
+              for security, moderation, and evidence integrity.
+            </p>
+          </div>
           <p className="mt-4 text-center text-sm text-muted-foreground">
             No account?{" "}
             <Link href="/signup" className="underline">

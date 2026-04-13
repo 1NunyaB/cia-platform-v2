@@ -11,6 +11,11 @@ export type OcrPageResult = {
   rawMeta: Record<string, unknown>;
 };
 
+export type ImageExtractionProfile =
+  | "text_first"
+  | "photo_first_limited"
+  | "photo_first_low_confidence";
+
 /**
  * Run Tesseract on a raster image buffer (PNG/JPEG/WebP/GIF).
  * Confidence is included when the engine returns a numeric value.
@@ -101,6 +106,26 @@ export function combineOcrText(pages: OcrPageResult[]): string {
   return parts.join("").trim();
 }
 
+function classifyImageOcr(text: string, confidence: number | null): ImageExtractionProfile {
+  const cleaned = text.trim();
+  const words = cleaned ? cleaned.split(/\s+/).filter(Boolean).length : 0;
+  const chars = cleaned.replace(/\s+/g, "").length;
+  const lines = cleaned ? cleaned.split(/\n+/).filter((l) => l.trim().length > 0).length : 0;
+  const avgWordLength = words > 0 ? chars / words : 0;
+  const conf = confidence ?? 0;
+
+  // Strong text density + acceptable OCR confidence => text-first document image.
+  if (words >= 32 && chars >= 150 && conf >= 55) return "text_first";
+  if (lines >= 8 && words >= 20 && conf >= 60) return "text_first";
+
+  // Scene/photo-first indicators: sparse OCR text and/or weak confidence.
+  if (words <= 18 || chars <= 90 || avgWordLength > 11) {
+    return conf < 45 ? "photo_first_low_confidence" : "photo_first_limited";
+  }
+  if (conf < 50) return "photo_first_low_confidence";
+  return "photo_first_limited";
+}
+
 /**
  * Server-side OCR only when text layer is absent (caller handles plain_text / pdf_text).
  * Does not touch the database — persist via `replaceExtractedTextsForEvidence`.
@@ -112,13 +137,19 @@ export async function runEvidenceOcrPipeline(
   mimeType: string | null,
   priorMethod: ExtractionMethod,
   priorText: string,
-): Promise<{ text: string; method: ExtractionMethod; pages: OcrPageResult[] }> {
+): Promise<{
+  text: string;
+  method: ExtractionMethod;
+  pages: OcrPageResult[];
+  imageProfile?: ImageExtractionProfile;
+}> {
   const mt = (mimeType ?? "").toLowerCase();
   const pages: OcrPageResult[] = [];
 
   try {
     if (mt.startsWith("image/")) {
       const { text, confidence } = await runTesseractOnImageBuffer(buffer);
+      const imageProfile = classifyImageOcr(text, confidence);
       pages.push({
         pageNumber: 1,
         frameRef: "image:1",
@@ -127,7 +158,7 @@ export async function runEvidenceOcrPipeline(
         rawMeta: { engine: "tesseract.js", mime: mt },
       });
       const combined = combineOcrText(pages);
-      return { text: combined, method: "ocr", pages };
+      return { text: combined, method: "ocr", pages, imageProfile };
     }
 
     if (mt.includes("pdf") && priorMethod === "ocr_pending" && !priorText.trim()) {

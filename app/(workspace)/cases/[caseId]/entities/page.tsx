@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getCaseById } from "@/services/case-service";
 import { searchCaseRegistry } from "@/services/case-registry-search-service";
 import { EntityCategoryBadges } from "@/components/entity-category-badges";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { InvestigationCategorySlug } from "@/types/analysis";
 
 function matchBadge(kind: "exact" | "alias" | "name_variant") {
@@ -57,7 +59,7 @@ export default async function CaseEntitiesPage({
         </p>
       </div>
 
-      <Card className="border-zinc-800 bg-zinc-950/80">
+      <Card className="border-border bg-card shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Search registry</CardTitle>
           <CardDescription>
@@ -67,23 +69,20 @@ export default async function CaseEntitiesPage({
         </CardHeader>
         <CardContent>
           <form method="get" className="flex flex-wrap items-center gap-2">
-            <input
+            <Input
               type="search"
               name="q"
               defaultValue={needle}
               placeholder="Name, alias, or variant…"
-              className="flex-1 min-w-[200px] rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+              className="min-w-[200px] flex-1"
             />
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-foreground hover:bg-zinc-700"
-            >
+            <Button type="submit" variant="secondary">
               Search
-            </button>
+            </Button>
             {needle ? (
               <Link
                 href={`/cases/${caseId}/entities`}
-                className="text-sm text-sky-400 hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 Clear
               </Link>
@@ -102,7 +101,7 @@ export default async function CaseEntitiesPage({
       </Card>
 
       {needle && evidenceFileHits.length > 0 ? (
-        <Card className="border-zinc-800 bg-zinc-950/80">
+        <Card className="border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Evidence files (name / alias)</CardTitle>
             <CardDescription>
@@ -114,7 +113,7 @@ export default async function CaseEntitiesPage({
               {evidenceFileHits.map((h) => (
                 <li
                   key={h.id}
-                  className="rounded-md border border-zinc-800/90 bg-zinc-950/50 px-3 py-2 text-sm"
+                  className="rounded-md border border-border bg-panel px-3 py-2 text-sm text-foreground"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="font-medium text-foreground">{h.title}</span>
@@ -140,7 +139,7 @@ export default async function CaseEntitiesPage({
         </Card>
       ) : null}
 
-      <Card className="border-zinc-800 bg-zinc-950/80">
+      <Card className="border-border">
         <CardHeader>
           <CardTitle>Entity registry</CardTitle>
           <CardDescription>Structured labels, categories, aliases, and linked evidence signals.</CardDescription>
@@ -151,7 +150,7 @@ export default async function CaseEntitiesPage({
               {needle ? "No entities matched this query." : "No entities stored for this case yet."}
             </p>
           ) : (
-            <ul className="divide-y rounded-md border border-zinc-800">
+            <ul className="divide-y divide-border rounded-md border border-border bg-card">
               {hits.map((row) => {
                 const e = row.entity;
                 const cats = (e.entity_categories ?? []).map(
@@ -188,7 +187,7 @@ export default async function CaseEntitiesPage({
                       <EntityCategoryBadges categories={cats} />
                     </div>
 
-                    <div className="rounded-md border border-zinc-800/90 bg-zinc-950/60 p-3 space-y-2">
+                    <div className="space-y-2 rounded-md border border-border bg-panel p-3">
                       <p className="text-xs font-medium text-foreground uppercase tracking-wide">Aliases</p>
                       {!aliases.length ? (
                         <p className="text-xs text-muted-foreground">No aliases recorded for this entity yet.</p>
@@ -197,7 +196,7 @@ export default async function CaseEntitiesPage({
                           {aliases.map((a) => (
                             <li
                               key={a.id}
-                              className="text-xs rounded border border-zinc-700/80 bg-zinc-900/50 px-2 py-1 text-zinc-200"
+                              className="rounded border border-border bg-muted px-2 py-1 text-xs text-foreground"
                               title={
                                 a.evidence_file_id
                                   ? "Linked from analysis-derived evidence (traceable)"
@@ -219,9 +218,9 @@ export default async function CaseEntitiesPage({
                           {row.evidence.slice(0, 12).map((hit) => (
                             <li
                               key={hit.id}
-                              className="rounded border border-zinc-800/80 bg-black/20 p-2 text-muted-foreground"
+                              className="rounded border border-border bg-muted/50 p-2 text-muted-foreground"
                             >
-                              <div className="flex flex-wrap justify-between gap-1 text-[11px] uppercase tracking-wide text-zinc-500">
+                              <div className="flex flex-wrap justify-between gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                                 <span>{hit.kind.replace(/_/g, " ")}</span>
                                 {hit.matched_via_alias ? (
                                   <span className="text-amber-400/90">Alias-linked signal</span>
@@ -253,7 +252,7 @@ export default async function CaseEntitiesPage({
                     ) : null}
 
                     {needle ? (
-                      <div className="rounded-md border border-zinc-800/80 bg-zinc-950/40 p-3 space-y-2">
+                      <div className="space-y-2 rounded-md border border-border bg-panel p-3">
                         <p className="text-xs font-medium text-foreground">Timeline & contradiction hints</p>
                         <ul className="text-xs text-muted-foreground space-y-1">
                           <li>

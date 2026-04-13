@@ -20,15 +20,15 @@ export function AuthenticityStrip({
     <div
       className={
         warn
-          ? "rounded-lg border border-amber-500/35 bg-amber-500/[0.07] px-4 py-3 text-sm"
-          : "rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm"
+          ? "rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          : "rounded-lg border border-border bg-panel px-4 py-3 text-sm text-foreground"
       }
       role="status"
       aria-label={`Evidence authenticity: ${title}`}
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Authenticity</span>
-        <span className={warn ? "font-medium text-amber-100/95" : "font-medium text-foreground"}>{title}</span>
+        <span className={warn ? "font-medium text-amber-950" : "font-medium text-foreground"}>{title}</span>
         <span className="text-xs text-muted-foreground">(independent from classification)</span>
       </div>
       {notes ? (

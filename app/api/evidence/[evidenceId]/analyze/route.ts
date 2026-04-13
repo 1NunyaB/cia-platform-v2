@@ -1,8 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
 import { getExtractedText } from "@/services/evidence-service";
 import { runAiAnalysisForEvidence } from "@/services/ai-analysis-service";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import { resolveRequestActor } from "@/lib/resolve-request-actor";
+import { logUsageEvent } from "@/services/usage-log-service";
+import { logActivity } from "@/services/activity-service";
 
 export const runtime = "nodejs";
 
@@ -14,19 +16,27 @@ export async function POST(
   const url = new URL(request.url);
   const force =
     url.searchParams.get("force") === "1" || url.searchParams.get("force") === "true";
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+
+  const actor = await resolveRequestActor();
+  if (!actor) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: ev, error: evErr } = await supabase
-    .from("evidence_files")
-    .select("id, case_id, processing_status")
-    .eq("id", evidenceId)
-    .single();
+  const client = actor.mode === "user" ? actor.supabase : actor.service;
+
+  const { data: ev, error: evErr } =
+    actor.mode === "user"
+      ? await client
+          .from("evidence_files")
+          .select("id, case_id, processing_status")
+          .eq("id", evidenceId)
+          .maybeSingle()
+      : await client
+          .from("evidence_files")
+          .select("id, case_id, processing_status")
+          .eq("id", evidenceId)
+          .eq("guest_session_id", actor.guestSessionId)
+          .maybeSingle();
   if (evErr || !ev) {
     return NextResponse.json({ error: "Evidence not found" }, { status: 404 });
   }
@@ -44,7 +54,7 @@ export async function POST(
     );
   }
 
-  const extracted = await getExtractedText(supabase, evidenceId);
+  const extracted = await getExtractedText(client, evidenceId);
   const text = extracted?.raw_text ?? "";
 
   if (!text.trim()) {
@@ -58,7 +68,7 @@ export async function POST(
   }
 
   if (!force) {
-    const { data: existing } = await supabase
+    const { data: existing } = await client
       .from("ai_analyses")
       .select("id, structured")
       .eq("evidence_file_id", evidenceId)
@@ -77,16 +87,41 @@ export async function POST(
 
   try {
     const caseId = (ev.case_id as string | null) ?? null;
-    const result = await runAiAnalysisForEvidence(supabase, {
+    const result = await runAiAnalysisForEvidence(client, {
       evidenceId,
       caseId,
-      userId: user.id,
+      userId: actor.mode === "user" ? actor.userId : null,
+      guestSessionId: actor.mode === "guest" ? actor.guestSessionId : null,
       extractedText: text,
     });
+    if (actor.mode === "user") {
+      await logUsageEvent({ userId: actor.userId, action: "evidence.analyze", meta: { evidenceId } });
+    } else {
+      await logUsageEvent({
+        guestSessionId: actor.guestSessionId,
+        action: "evidence.analyze",
+        meta: { evidenceId },
+      });
+    }
     if (caseId) {
       revalidatePath(`/cases/${caseId}`);
     }
     revalidatePath(`/evidence/${evidenceId}`);
+    if (actor.mode === "user") {
+      try {
+        await logActivity(client, {
+          caseId,
+          actorId: actor.userId,
+          actorLabel: "Analyst",
+          action: "evidence.analyze",
+          entityType: "evidence_file",
+          entityId: evidenceId,
+          payload: { force },
+        });
+      } catch {
+        /* non-blocking */
+      }
+    }
     return NextResponse.json(result);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Analysis failed";

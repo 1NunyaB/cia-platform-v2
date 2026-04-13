@@ -46,12 +46,12 @@ export function CaseEvidenceRow({
           ) : null}
         </div>
         {sal ? (
-          <p className="text-[11px] font-mono text-sky-400/90 mt-0.5">{sal}</p>
+          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{sal}</p>
         ) : null}
         <p className="text-xs text-muted-foreground">
           {file.mime_type ?? "unknown type"}
           {primary !== file.original_filename ? (
-            <span className="block mt-0.5 text-[11px] text-zinc-500">Original: {file.original_filename}</span>
+            <span className="mt-0.5 block text-[11px] text-muted-foreground">Original: {file.original_filename}</span>
           ) : null}
         </p>
         {latestAnalysis?.summary ? (

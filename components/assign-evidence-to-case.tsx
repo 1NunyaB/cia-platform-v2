@@ -50,8 +50,8 @@ export function AssignEvidenceToCase({
 
   if (cases.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Create a case first, then you can attach this file from the dropdown above.
+      <p className="text-xs text-foreground">
+        Create an investigation first, then you can attach this file from the dropdown above (in-app only).
       </p>
     );
   }
@@ -60,9 +60,9 @@ export function AssignEvidenceToCase({
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[200px] flex-1 space-y-1">
-          <label className="text-xs text-muted-foreground">Add to case</label>
+          <label className="text-xs font-medium text-foreground">Add to investigation</label>
           <Select value={caseId} onValueChange={setCaseId}>
-            <SelectTrigger className="bg-zinc-950 border-zinc-700">
+            <SelectTrigger>
               <SelectValue placeholder="Select a case…" />
             </SelectTrigger>
             <SelectContent>
@@ -78,7 +78,7 @@ export function AssignEvidenceToCase({
           {loading ? "Assigning…" : "Assign"}
         </Button>
       </div>
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="text-xs text-alert-foreground">{error}</p> : null}
     </div>
   );
 }

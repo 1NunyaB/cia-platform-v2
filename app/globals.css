@@ -2,51 +2,182 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * CIS — Collaborative Investigation Sleuths theme — single source of truth for colors.
+ * All HSL components are space-separated for Tailwind hsl(var(--token)).
+ *
+ * - --background: pale blue app canvas (~#eaf4ff)
+ * - --card: white elevated surfaces
+ * - --panel: very light blue for nested panels / list rows (~#f4f8ff)
+ * - --document: pale blue wells for previews & extracted text blocks
+ * - --foreground: near-black primary text
+ * - --muted-foreground: dark gray secondary text (readable on pale blue)
+ * - --alert-*: inline / destructive alerts — red text on light red
+ */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Canvas — pale blue app shell */
+    --background: 210 100% 96%;
+    --foreground: 0 0% 7%;
+
+    /* Cards / modals — white or near-white on blue canvas */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 7%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --popover-foreground: 0 0% 7%;
+
+    /* Primary actions */
+    --primary: 222 47% 11%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 45% 94%;
+    --secondary-foreground: 0 0% 9%;
+
+    /* Muted surfaces & secondary labels — foreground dark enough for WCAG-style contrast on pale canvas */
+    --muted: 210 40% 93%;
+    --muted-foreground: 215 22% 28%;
+
+    --accent: 210 55% 94%;
+    --accent-foreground: 0 0% 9%;
+
+    /* Solid destructive (buttons) */
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Inline alerts: light red surface + strong red text (~#c00000) */
+    --alert: 0 86% 97%;
+    --alert-foreground: 0 100% 38%;
+    --alert-border: 0 90% 92%;
+
+    --border: 210 32% 80%;
+    --input: 210 32% 80%;
+    /* Form controls: light field, black text, ~#555 placeholders */
+    --form-field-bg: 220 100% 99%;
+    --form-field-text: 0 0% 0%;
+    --form-field-placeholder: 0 0% 30%;
+    --ring: 210 90% 45%;
+
+    /* Nested panels / tinted rows (very light blue, distinct from canvas) */
+    --panel: 220 100% 98%;
+
+    /* Document & preview wells (extracted text, file preview chrome) */
+    --document: 210 100% 96%;
+    --document-border: 210 60% 88%;
+
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 210 100% 96%;
+    --foreground: 0 0% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 45% 94%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 210 40% 93%;
+    --muted-foreground: 215 22% 28%;
+    --accent: 210 55% 94%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --alert: 0 86% 97%;
+    --alert-foreground: 0 100% 38%;
+    --alert-border: 0 90% 92%;
+    --border: 210 32% 80%;
+    --input: 210 32% 80%;
+    --form-field-bg: 220 100% 99%;
+    --form-field-text: 0 0% 0%;
+    --form-field-placeholder: 0 0% 30%;
+    --ring: 210 90% 45%;
+    --panel: 220 100% 98%;
+    --document: 210 100% 96%;
+    --document-border: 210 60% 88%;
   }
+}
+
+@keyframes cisLensPulse {
+  0% {
+    transform: translate(-6px, -5px) scale(0.92);
+  }
+  25% {
+    transform: translate(10px, 6px) scale(1.15);
+  }
+  50% {
+    transform: translate(0px, 0px) scale(1.02);
+  }
+  75% {
+    transform: translate(-9px, 8px) scale(1.2);
+  }
+  100% {
+    transform: translate(-6px, -5px) scale(0.92);
+  }
+}
+
+@keyframes cisHandleShift {
+  0%,
+  100% {
+    transform: rotate(39deg) translateY(0);
+  }
+  50% {
+    transform: rotate(39deg) translateY(2px);
+  }
+}
+
+.cis-loader {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 9999px;
+  border: 2px solid hsl(var(--document-border));
+  background:
+    radial-gradient(circle at 40% 35%, rgb(255 255 255 / 0.92), rgb(214 232 253 / 0.84) 60%, rgb(177 210 244 / 0.72)),
+    repeating-radial-gradient(circle at 52% 48%, rgb(18 63 105 / 0.12) 0px 1px, transparent 1px 5px);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.45);
+}
+
+.cis-loader::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 9999px;
+  border: 1px solid rgb(15 23 42 / 0.25);
+  animation: cisLensPulse 1.8s ease-in-out infinite;
+}
+
+.cis-loader::after {
+  content: "";
+  position: absolute;
+  right: -14px;
+  bottom: -14px;
+  width: 22px;
+  height: 5px;
+  border-radius: 9999px;
+  background: rgb(15 23 42 / 0.75);
+  transform-origin: left center;
+  animation: cisHandleShift 1.8s ease-in-out infinite;
+}
+
+.cis-loader--inline {
+  width: 18px;
+  height: 18px;
+  border-width: 1px;
+}
+
+.cis-loader--inline::before {
+  inset: 3px;
+  border-width: 1px;
+}
+
+.cis-loader--inline::after {
+  right: -6px;
+  bottom: -5px;
+  width: 9px;
+  height: 2px;
 }
 
 @layer base {
@@ -54,17 +185,21 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply min-h-screen bg-background text-foreground antialiased;
   }
 
-  /* Native form controls inherit foreground so typed text stays readable on dark surfaces. */
-  input,
+  /* Ensure prose on tinted canvas stays legible */
+  main {
+    @apply text-foreground;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
   textarea,
   select {
-    color: hsl(var(--foreground));
+    color: hsl(var(--form-field-text));
   }
-  input::placeholder,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])::placeholder,
   textarea::placeholder {
-    color: hsl(var(--muted-foreground));
+    color: hsl(var(--form-field-placeholder));
   }
 }

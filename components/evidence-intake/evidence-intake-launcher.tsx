@@ -46,22 +46,22 @@ export function EvidenceIntakeLauncher({
   ];
 
   return (
-    <div className="bg-white text-zinc-950">
+    <div className="bg-card text-foreground">
       <div className="mx-auto max-w-3xl px-4 py-8 space-y-8">
         {parentBack ? (
           <Link
             href={parentBack.href}
-            className="inline-block text-sm font-medium text-zinc-600 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-950"
+            className="inline-block text-sm font-medium text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
           >
             ← {parentBack.label}
           </Link>
         ) : null}
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950">Add evidence</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Add evidence</h1>
           <p className="mt-2 text-sm text-zinc-600 leading-relaxed">{contextLabel}</p>
         </div>
 
-        <p className="text-sm text-red-800 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <p className="text-sm text-alert-foreground rounded-lg border border-alert-border bg-alert px-4 py-3">
           <strong className="font-semibold">Security:</strong> uploads are validated and scanned before storage.
           Blocked files are never saved. Allowed types include PDF, text, Office, images, and common audio/video —
           not executables or archives.
@@ -76,11 +76,11 @@ export function EvidenceIntakeLauncher({
                   href={opt.href}
                   className="group flex gap-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:border-zinc-400 hover:shadow-md"
                 >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-900">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-foreground">
                     <Icon className="h-6 w-6" aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1 space-y-1">
-                    <span className="block text-base font-semibold text-zinc-950">{opt.title}</span>
+                    <span className="block text-base font-semibold text-foreground">{opt.title}</span>
                     <span className="block text-sm text-zinc-700">{opt.description}</span>
                     <span className="block text-xs text-zinc-500 leading-relaxed">
                       <span className="font-medium text-zinc-700">When to use:</span> {opt.when}

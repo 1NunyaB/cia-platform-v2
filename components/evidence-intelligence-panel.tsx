@@ -22,8 +22,8 @@ export function EvidenceIntelligencePanel({
   const weakLeads = suggestions.filter((s) => !s.autoLinked && s.tier === "low");
 
   return (
-    <Card className="border-zinc-800 bg-zinc-950/80 shadow-lg ring-1 ring-zinc-800/80">
-      <CardHeader className="border-b border-zinc-800/90 pb-3">
+    <Card className="border-border shadow-md">
+      <CardHeader className="border-b border-border pb-3">
         <CardTitle className="text-lg tracking-tight">Evidence intelligence (on open)</CardTitle>
         <CardDescription className="text-muted-foreground text-sm">
           Automatic correlation check across clusters, entities, links, and collaboration signals. Structured advisory
@@ -44,7 +44,7 @@ export function EvidenceIntelligencePanel({
 
         <AnalysisFindingPanel finding={finding} />
 
-        <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-xs text-muted-foreground space-y-2">
+        <div className="space-y-2 rounded-lg border border-border bg-panel p-3 text-xs text-muted-foreground">
           <p className="font-semibold text-foreground">Threshold logic (heuristic scores 0–1)</p>
           <ul className="list-disc pl-4 space-y-1">
             <li>
@@ -65,7 +65,7 @@ export function EvidenceIntelligencePanel({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-md border border-zinc-800 p-3 text-sm">
+          <div className="rounded-md border border-border bg-card p-3 text-sm">
             <h4 className="font-medium text-foreground mb-2">Collaboration snapshot</h4>
             <ul className="text-muted-foreground space-y-1 text-xs">
               <li>Open events logged: {collaboration.openEventCount}</li>
@@ -81,7 +81,7 @@ export function EvidenceIntelligencePanel({
               <li>Cross-evidence links: {collaboration.crossEvidenceLinkCount}</li>
             </ul>
           </div>
-          <div className="rounded-md border border-zinc-800 p-3 text-sm">
+          <div className="rounded-md border border-border bg-card p-3 text-sm">
             <h4 className="font-medium text-foreground mb-2">Cluster links (current)</h4>
             {existingClusters.length === 0 ? (
               <p className="text-xs text-muted-foreground">Not linked to a cluster yet (unless just auto-linked above).</p>
@@ -95,7 +95,7 @@ export function EvidenceIntelligencePanel({
                     ) : null}
                     <Link
                       href={`/cases/${caseId}#evidence-clusters`}
-                      className="text-sky-400 hover:underline mt-1 inline-block"
+                      className="mt-1 inline-block text-primary hover:underline"
                     >
                       View on case page
                     </Link>
@@ -107,8 +107,8 @@ export function EvidenceIntelligencePanel({
         </div>
 
         {autoLinked.length > 0 ? (
-          <div className="rounded-md border border-emerald-500/30 bg-emerald-950/20 p-3 text-sm">
-            <h4 className="font-medium text-emerald-200 mb-1">Automatic cluster placement (this open)</h4>
+          <div className="rounded-md border border-emerald-200 bg-emerald-50/90 p-3 text-sm">
+            <h4 className="mb-1 font-medium text-emerald-950">Automatic cluster placement (this open)</h4>
             <ul className="space-y-2 text-xs text-muted-foreground">
               {autoLinked.map((a) => (
                 <li key={a.clusterId}>
@@ -118,7 +118,7 @@ export function EvidenceIntelligencePanel({
               ))}
             </ul>
             <p className="text-[11px] text-muted-foreground mt-2">
-              Logged as <code className="text-emerald-200/90">evidence.cluster_auto_linked</code> in case activity.
+              Logged as <code className="text-emerald-900">evidence.cluster_auto_linked</code> in case activity.
             </p>
           </div>
         ) : null}
@@ -128,23 +128,23 @@ export function EvidenceIntelligencePanel({
             <h4 className="text-sm font-medium text-foreground">Suggested clusters (review recommended)</h4>
             <ul className="space-y-3 text-sm">
               {recommended.map((s) => (
-                <li key={s.clusterId} className="rounded-md border border-zinc-800 bg-zinc-950/40 p-3">
+                <li key={s.clusterId} className="rounded-md border border-border bg-panel p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="font-medium text-foreground">{s.title ?? "Cluster"}</span>
                     <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
                       {(s.score * 100).toFixed(0)}% · {s.tier}
                     </span>
                   </div>
-                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground list-disc pl-4">
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-foreground">
                     {s.reasons.map((r, i) => (
                       <li key={i}>{r}</li>
                     ))}
                   </ul>
                   <Link
                     href={`/cases/${caseId}#evidence-clusters`}
-                    className="text-xs text-sky-400 hover:underline mt-2 inline-block"
+                    className="mt-2 inline-block text-xs text-primary hover:underline"
                   >
-                    Review on case page — membership stays shared for all analysts
+                    Review on case page — linked for all analysts who can open this case (in-app only)
                   </Link>
                 </li>
               ))}
@@ -155,7 +155,7 @@ export function EvidenceIntelligencePanel({
         {weakLeads.length > 0 ? (
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-foreground">Possible related leads (low confidence)</h4>
-            <ul className="text-xs text-muted-foreground space-y-1">
+            <ul className="space-y-1 text-xs text-foreground">
               {weakLeads.map((s) => (
                 <li key={s.clusterId}>
                   {s.title ?? s.clusterId} — {(s.score * 100).toFixed(0)}%

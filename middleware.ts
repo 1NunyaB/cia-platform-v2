@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { GUEST_SESSION_COOKIE, isGuestSessionIdFormat } from "@/lib/guest-session";
 
 const isPublicPath = (pathname: string) =>
   pathname === "/" ||
@@ -53,7 +54,10 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (!isPublicPath(pathname) && !user) {
+  const guestCookie = request.cookies.get(GUEST_SESSION_COOKIE)?.value;
+  const hasGuestSession = !!(guestCookie && isGuestSessionIdFormat(guestCookie));
+
+  if (!isPublicPath(pathname) && !user && !hasGuestSession) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

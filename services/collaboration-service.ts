@@ -100,15 +100,67 @@ export type DashboardChatMessageRow = {
   created_at: string;
 };
 
+export type DashboardChatMuteRow = {
+  id: string;
+  user_id: string;
+  muted_until: string;
+  reason: string | null;
+  muted_by: string | null;
+  created_at: string;
+};
+
 export async function listRecentDashboardChat(
   supabase: AppSupabaseClient,
-  limit = 80,
+  limit = 200,
 ): Promise<DashboardChatMessageRow[]> {
+  const lim = Math.min(Math.max(limit, 1), 500);
   const { data, error } = await supabase
     .from("dashboard_chat_messages")
     .select("id, author_id, author_label, body, created_at")
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(lim);
   if (error) throw new Error(error.message);
   return ((data ?? []) as DashboardChatMessageRow[]).reverse();
+}
+
+/** Search workspace chat history (persistent messages). */
+export async function searchDashboardChat(
+  supabase: AppSupabaseClient,
+  query: string,
+  limit = 150,
+): Promise<DashboardChatMessageRow[]> {
+  const q = query.trim();
+  if (q.length < 2) {
+    return listRecentDashboardChat(supabase, limit);
+  }
+  const lim = Math.min(Math.max(limit, 1), 500);
+  const safe = q.replace(/[%_]/g, " ").trim();
+  if (safe.length < 2) {
+    return listRecentDashboardChat(supabase, limit);
+  }
+  const { data, error } = await supabase
+    .from("dashboard_chat_messages")
+    .select("id, author_id, author_label, body, created_at")
+    .ilike("body", `%${safe}%`)
+    .order("created_at", { ascending: false })
+    .limit(lim);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as DashboardChatMessageRow[]).reverse();
+}
+
+export async function getActiveDashboardChatMute(
+  supabase: AppSupabaseClient,
+  userId: string,
+): Promise<DashboardChatMuteRow | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("dashboard_chat_mutes")
+    .select("id, user_id, muted_until, reason, muted_by, created_at")
+    .eq("user_id", userId)
+    .gt("muted_until", now)
+    .order("muted_until", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as DashboardChatMuteRow | null) ?? null;
 }

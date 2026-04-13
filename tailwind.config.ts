@@ -15,6 +15,18 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        /** Nested panels / tinted rows (very light blue) — maps to --panel in globals.css */
+        panel: "hsl(var(--panel))",
+        /** Extracted text & file-preview wells — maps to --document */
+        document: "hsl(var(--document))",
+        /** Border for document wells — maps to --document-border */
+        "document-border": "hsl(var(--document-border))",
+        /** Inline alert (red on light red) — maps to --alert* */
+        alert: {
+          DEFAULT: "hsl(var(--alert))",
+          foreground: "hsl(var(--alert-foreground))",
+          border: "hsl(var(--alert-border))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -42,6 +54,12 @@ const config: Config = {
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
+        },
+        /** Text inputs, textareas, selects — maps to --form-field-* in globals.css */
+        "form-field": {
+          DEFAULT: "hsl(var(--form-field-bg))",
+          foreground: "hsl(var(--form-field-text))",
+          placeholder: "hsl(var(--form-field-placeholder))",
         },
       },
       borderRadius: {

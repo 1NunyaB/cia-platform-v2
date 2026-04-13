@@ -9,18 +9,18 @@ import {
 export function ConcealedLanguagePanel({ detail }: { detail: ConcealedLanguageAnalysisDetail }) {
   return (
     <div
-      className="rounded-xl border border-zinc-800 bg-zinc-950 text-foreground shadow-inner"
+      className="rounded-xl border border-border bg-white text-foreground shadow-sm"
       role="region"
       aria-label="Concealed language analysis"
     >
-      <div className="border-b border-zinc-800 px-4 py-3">
+      <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold text-foreground">Concealed language & euphemism review</h3>
         <p className="text-xs text-muted-foreground mt-1">
           Flags unusual phrasing for review. Possible non-literal readings are hypotheses — not proven codes unless
           strongly corroborated in the extract and case context.
         </p>
       </div>
-      <div className="px-4 py-4 border-b border-zinc-800/90 space-y-2">
+      <div className="px-4 py-4 border-b border-border space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Overview</p>
         <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{detail.overview}</p>
         <p className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap">{detail.case_only_scope_note}</p>
@@ -28,7 +28,7 @@ export function ConcealedLanguagePanel({ detail }: { detail: ConcealedLanguageAn
         <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{detail.conservative_summary}</p>
       </div>
       {detail.flagged_phrases.length > 0 ? (
-        <ul className="divide-y divide-zinc-800/90">
+        <ul className="divide-y divide-border">
           {detail.flagged_phrases.map((row, i) => (
             <li key={i} className="px-4 py-4 space-y-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-500/90">

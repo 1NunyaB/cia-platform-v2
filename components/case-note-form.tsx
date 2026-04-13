@@ -20,12 +20,12 @@ export function CaseNoteForm({
   caseId,
   evidenceFileId,
   placeholder = "Add a note…",
-  caseIsPublic = false,
+  caseIsPublic = true,
 }: {
   caseId: string;
   evidenceFileId?: string | null;
   placeholder?: string;
-  /** When false, "Public" visibility option is hidden/disabled. */
+  /** When false, the case-level &ldquo;public note&rdquo; option is hidden (legacy rows). */
   caseIsPublic?: boolean;
 }) {
   const router = useRouter();
@@ -96,7 +96,7 @@ export function CaseNoteForm({
           </Select>
           {!caseIsPublic ? (
             <p className="text-[11px] text-muted-foreground">
-              Public visibility is available only when the case is set to public.
+              Case-wide &ldquo;public&rdquo; notes apply to shared investigations listed in the directory.
             </p>
           ) : null}
         </div>

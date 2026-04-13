@@ -1,4 +1,4 @@
--- CIA Platform — initial schema
+-- CIS — Collaborative Investigation Sleuths — initial schema
 -- Run in Supabase SQL editor or via supabase db push
 -- Create storage bucket "evidence" (private) in Dashboard; path pattern: {case_id}/{evidence_id}/{filename}
 

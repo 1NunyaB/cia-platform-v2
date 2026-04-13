@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { InvestigationLoadingIndicator } from "@/components/investigation-loading-indicator";
 
 export function AnalyzeButton({ evidenceId }: { evidenceId: string }) {
   const router = useRouter();
@@ -30,8 +31,13 @@ export function AnalyzeButton({ evidenceId }: { evidenceId: string }) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      <Button type="button" onClick={() => void run()} disabled={loading}>
-        {loading ? "Running AI…" : "Run AI analysis"}
+      <Button
+        type="button"
+        onClick={() => void run()}
+        disabled={loading}
+        className="bg-sky-700 text-white hover:bg-sky-600 disabled:bg-sky-700 disabled:text-white"
+      >
+        {loading ? <InvestigationLoadingIndicator inline label="Running AI..." /> : "Run AI analysis"}
       </Button>
     </div>
   );

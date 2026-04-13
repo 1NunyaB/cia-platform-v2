@@ -1,6 +1,17 @@
-import type { AppSupabaseClient, CaseRow, CaseMemberRole, CaseVisibility } from "@/types";
+import type { AppSupabaseClient, CaseRow, CaseMemberRole } from "@/types";
+import type { CaseListFilters } from "@/lib/case-list-filters";
+import { filterCasesByMetadata } from "@/lib/case-list-filters";
+import { normalizeCaseTitle } from "@/lib/case-title";
 import { logActivity } from "@/services/activity-service";
 import { recordContribution } from "@/services/contributions-service";
+
+/** New investigations are always shared (public listing). */
+const NEW_CASE_VISIBILITY = "public" as const;
+
+function emptyToNull(s: string | null | undefined): string | null {
+  const t = s?.trim();
+  return t ? t : null;
+}
 
 export async function createCase(
   supabase: AppSupabaseClient,
@@ -8,7 +19,12 @@ export async function createCase(
     userId: string;
     title: string;
     description?: string | null;
-    visibility: CaseVisibility;
+    incident_year?: number | null;
+    incident_city?: string | null;
+    incident_state?: string | null;
+    accused_label?: string | null;
+    victim_labels?: string | null;
+    known_weapon?: string | null;
   },
 ) {
   const { data: created, error } = await supabase
@@ -16,8 +32,14 @@ export async function createCase(
     .insert({
       title: input.title,
       description: input.description ?? null,
-      visibility: input.visibility,
+      visibility: NEW_CASE_VISIBILITY,
       created_by: input.userId,
+      incident_year: input.incident_year ?? null,
+      incident_city: emptyToNull(input.incident_city ?? undefined),
+      incident_state: emptyToNull(input.incident_state ?? undefined),
+      accused_label: emptyToNull(input.accused_label ?? undefined),
+      victim_labels: emptyToNull(input.victim_labels ?? undefined),
+      known_weapon: emptyToNull(input.known_weapon ?? undefined),
     })
     .select("id")
     .single();
@@ -37,37 +59,27 @@ export async function createCase(
   return { id: caseId };
 }
 
-const normTitle = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-
 /**
- * Find a case with the same normalized title + visibility created within the time window.
- * Does not filter by `created_by` — works for no-auth / nullable creator and avoids RLS gaps on
- * that column. Never throws: logs DB errors and returns null so POST /api/cases can still create.
+ * If any case already uses this normalized title, return its id (no second row for the same title).
+ * `created_by` remains for audit only. Uses `find_case_by_normalized_title`.
  */
-export async function findRecentDuplicateCaseInWindow(
+export async function findExistingCaseByNormalizedTitle(
   supabase: AppSupabaseClient,
-  input: {
-    title: string;
-    visibility: CaseVisibility;
-    windowSec?: number;
-  },
+  input: { title: string },
 ): Promise<string | null> {
-  const windowSec = input.windowSec ?? 120;
-  const since = new Date(Date.now() - windowSec * 1000).toISOString();
-  const { data, error } = await supabase
-    .from("cases")
-    .select("id, title")
-    .eq("visibility", input.visibility)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(80);
+  const normalized = normalizeCaseTitle(input.title);
+  if (!normalized) return null;
+  const { data, error } = await supabase.rpc("find_case_by_normalized_title", {
+    p_normalized: normalized,
+  });
   if (error) {
-    console.warn("[case dedupe] cases query failed:", error.message);
+    if (!error.message.includes("does not exist") && !error.message.includes("schema cache")) {
+      console.warn("[case dedupe] find_case_by_normalized_title:", error.message);
+    }
     return null;
   }
-  const t = normTitle(input.title);
-  const hit = (data ?? []).find((c) => normTitle((c.title as string) ?? "") === t);
-  return hit ? (hit.id as string) : null;
+  if (data == null || data === "") return null;
+  return String(data);
 }
 
 const activityTs = (iso: string) => Date.parse(iso) || 0;
@@ -99,7 +111,11 @@ export function dedupeCasesByIdSortByRecent(cases: CaseRow[]): CaseRow[] {
   });
 }
 
-export async function listCasesForUser(supabase: AppSupabaseClient, userId: string) {
+export async function listCasesForUser(
+  supabase: AppSupabaseClient,
+  userId: string,
+  filters?: CaseListFilters | null,
+) {
   const { data: memberships, error: mErr } = await supabase
     .from("case_members")
     .select("case_id")
@@ -132,7 +148,11 @@ export async function listCasesForUser(supabase: AppSupabaseClient, userId: stri
     .in("id", ids)
     .order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return dedupeCasesByIdSortByRecent((data ?? []) as CaseRow[]);
+  let rows = dedupeCasesByIdSortByRecent((data ?? []) as CaseRow[]);
+  if (filters) {
+    rows = filterCasesByMetadata(rows, filters);
+  }
+  return rows;
 }
 
 export async function listPublicCases(supabase: AppSupabaseClient) {
@@ -142,17 +162,6 @@ export async function listPublicCases(supabase: AppSupabaseClient) {
     .eq("visibility", "public")
     .order("updated_at", { ascending: false })
     .limit(100);
-  if (error) throw new Error(error.message);
-  return data ?? [];
-}
-
-/** Service-role or privileged client: list cases for workspace home (no membership filter). */
-export async function listAllCases(supabase: AppSupabaseClient) {
-  const { data, error } = await supabase
-    .from("cases")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(200);
   if (error) throw new Error(error.message);
   return data ?? [];
 }

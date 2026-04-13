@@ -25,18 +25,18 @@ export function MediaAnalysisPanel({ detail }: { detail: MediaAnalysisDetail }) 
 
   return (
     <div
-      className="rounded-xl border border-zinc-800 bg-zinc-950 text-foreground shadow-inner"
+      className="rounded-xl border border-border bg-white text-foreground shadow-sm"
       role="region"
       aria-label="Media and transcript analysis"
     >
-      <div className="border-b border-zinc-800 px-4 py-3">
+      <div className="border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold text-foreground">Media & text layers</h3>
         <p className="text-xs text-muted-foreground mt-1">
           Direct visible/audible observations are separated from transcript, OCR, captions, and metadata. Identity
           claims distinguish named vs possible match vs unknown; visual-only is never Confirmed identity.
         </p>
       </div>
-      <dl className="divide-y divide-zinc-800/90">
+      <dl className="divide-y divide-border">
         <MediaRow label="Visible / audible" value={detail.visible_audible_evidence} />
         <MediaRow
           label="Transcript / OCR / captions (interpreted)"
@@ -51,7 +51,7 @@ export function MediaAnalysisPanel({ detail }: { detail: MediaAnalysisDetail }) 
           <dd className="mt-1 text-sm sm:mt-0 space-y-1">
             <p className="font-medium text-foreground">{tsLabel}</p>
             <p className="text-xs text-muted-foreground">
-              Code: <code className="text-zinc-400">{detail.timestamp_date_strength}</code>
+              Code: <code className="text-muted-foreground">{detail.timestamp_date_strength}</code>
             </p>
           </dd>
         </div>
@@ -62,7 +62,7 @@ export function MediaAnalysisPanel({ detail }: { detail: MediaAnalysisDetail }) 
           <dd className="mt-1 text-sm sm:mt-0 space-y-1">
             <p className="text-foreground">{basisLabel}</p>
             <p className="text-xs text-muted-foreground">
-              Code: <code className="text-zinc-400">{detail.identity_basis}</code>
+              Code: <code className="text-muted-foreground">{detail.identity_basis}</code>
             </p>
           </dd>
         </div>
@@ -73,7 +73,7 @@ export function MediaAnalysisPanel({ detail }: { detail: MediaAnalysisDetail }) 
           <dd className="mt-1 text-sm sm:mt-0 space-y-1">
             <p className="text-foreground">{claimLabel}</p>
             <p className="text-xs text-muted-foreground">
-              Code: <code className="text-zinc-400">{detail.identity_claim_kind}</code>
+              Code: <code className="text-muted-foreground">{detail.identity_claim_kind}</code>
             </p>
           </dd>
         </div>
@@ -87,7 +87,7 @@ export function MediaAnalysisPanel({ detail }: { detail: MediaAnalysisDetail }) 
         </div>
         <MediaRow label="Cannot be confirmed" value={detail.cannot_be_confirmed} emphasized />
         {suggestFollowup ? (
-          <div className="px-4 py-3 bg-zinc-900/40 border-t border-zinc-800">
+          <div className="px-4 py-3 bg-panel border-t border-border">
             <p className="text-xs font-medium text-sky-400/90">Suggested investigator follow-up</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               If identity remains unclear, use the Next step field on the structured finding — it may include options

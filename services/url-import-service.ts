@@ -14,6 +14,12 @@ export type UrlImportResult = {
   sourceLabel: string;
 };
 
+export type UrlImportLinkCandidate = {
+  url: string;
+  label: string;
+  isDirectDocument: boolean;
+};
+
 function safeFilenameSegment(s: string): string {
   return s.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "page";
 }
@@ -135,4 +141,65 @@ export function buildImportFilename(u: URL): string {
   const pathPart = u.pathname.split("/").filter(Boolean).pop() ?? "page";
   const base = safeFilenameSegment(pathPart).replace(/\.[^.]+$/, "");
   return `import-${host}-${base}-${Date.now()}.txt`;
+}
+
+function isSupportedDocLink(u: URL): boolean {
+  const p = u.pathname.toLowerCase();
+  return (
+    p.endsWith(".pdf") ||
+    p.endsWith(".txt") ||
+    p.endsWith(".md") ||
+    p.endsWith(".csv") ||
+    p.endsWith(".json") ||
+    p.endsWith(".xml")
+  );
+}
+
+/** Reusable page scrubber: collect absolute document/page links for batch URL import selection. */
+export async function collectImportableLinksFromPage(
+  pageUrl: string,
+  limit = 300,
+): Promise<UrlImportLinkCandidate[]> {
+  const base = parsePublicHttpUrl(pageUrl);
+  const res = await fetch(base.href, {
+    redirect: "follow",
+    headers: {
+      Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+      "User-Agent": "CIS/1.0 (batch link collector)",
+    },
+  });
+  if (!res.ok) throw new Error(`Could not fetch page (${res.status})`);
+  const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (!ct.includes("html")) {
+    throw new Error("Link collection expects an HTML page URL.");
+  }
+  const html = await res.text();
+  const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const out: UrlImportLinkCandidate[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) && out.length < limit) {
+    const rawHref = (m[1] ?? "").trim();
+    if (!rawHref || rawHref.startsWith("#") || rawHref.startsWith("javascript:") || rawHref.startsWith("mailto:")) {
+      continue;
+    }
+    let abs: URL;
+    try {
+      abs = new URL(rawHref, base);
+    } catch {
+      continue;
+    }
+    if (abs.protocol !== "http:" && abs.protocol !== "https:") continue;
+    const key = abs.href;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const anchorText = htmlToPlainText(m[2] ?? "").slice(0, 180) || safeFilenameSegment(abs.pathname.split("/").pop() ?? abs.hostname);
+    out.push({
+      url: key,
+      label: anchorText,
+      isDirectDocument: isSupportedDocLink(abs),
+    });
+  }
+  // Prioritize direct document links first.
+  return out.sort((a, b) => Number(b.isDirectDocument) - Number(a.isDirectDocument));
 }

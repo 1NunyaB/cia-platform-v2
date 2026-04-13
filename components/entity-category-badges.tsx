@@ -17,7 +17,7 @@ export function EntityCategoryBadges({
       {categories.map((c) => (
         <span
           key={c}
-          className="rounded border border-zinc-600 bg-zinc-900/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground"
+          className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground"
         >
           {INVESTIGATION_CATEGORY_LABELS[c]}
         </span>

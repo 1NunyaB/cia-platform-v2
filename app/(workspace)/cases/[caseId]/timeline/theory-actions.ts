@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assertPlatformDeleteAdmin } from "@/lib/admin-guard";
+import { logActivity } from "@/services/activity-service";
 import { clearTheoryPlacement, upsertTheoryPlacement } from "@/services/timeline-theory-service";
 
 export async function saveTheoryPlacementAction(formData: FormData) {
@@ -41,11 +43,20 @@ export async function clearTheoryPlacementAction(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Unauthorized");
+  assertPlatformDeleteAdmin(user);
 
   await clearTheoryPlacement(supabase, {
     caseId,
     userId: user.id,
     timelineEventId: eventId,
+  });
+  await logActivity(supabase, {
+    action: "theory_placement.deleted_admin",
+    caseId,
+    actorId: user.id,
+    entityType: "timeline_theory_placement",
+    entityId: eventId,
+    payload: { timeline_event_id: eventId },
   });
   revalidatePath(`/cases/${caseId}/timeline`);
 }

@@ -7,19 +7,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { StickyNoteRow, StickyReplyRow } from "@/services/collaboration-service";
+import { AuthorPersonaLine } from "@/components/author-persona-line";
+import type { ProfileWithInvestigator } from "@/lib/profiles";
 
 export function EvidenceStickyNotesPanel({
   caseId,
   evidenceId,
   currentUserId,
+  currentUserCanDelete,
   initial,
-  authorLabel,
+  getProfile,
 }: {
   caseId: string;
   evidenceId: string;
   currentUserId: string | null;
+  currentUserCanDelete: boolean;
   initial: { sticky: StickyNoteRow; replies: StickyReplyRow[] }[];
-  authorLabel: (id: string | null) => string;
+  getProfile: (id: string | null) => ProfileWithInvestigator | undefined;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
@@ -48,8 +52,13 @@ export function EvidenceStickyNotesPanel({
   }
 
   async function deleteSticky(id: string) {
-    if (!currentUserId) return;
-    const res = await fetch(`/api/cases/${caseId}/sticky-notes/${id}`, { method: "DELETE" });
+    if (!currentUserId || !currentUserCanDelete) return;
+    const code = window.prompt("Enter admin confirmation code");
+    if (code == null) return;
+    const res = await fetch(`/api/cases/${caseId}/sticky-notes/${id}`, {
+      method: "DELETE",
+      headers: { "x-admin-confirm-code": code.trim() },
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError((data as { error?: string }).error ?? "Delete failed");
@@ -92,29 +101,29 @@ export function EvidenceStickyNotesPanel({
             onChange={(e) => setBody(e.target.value)}
             rows={2}
             placeholder="Quick observation on this file…"
-            className="bg-zinc-950 border-zinc-700"
           />
           <Button type="submit" size="sm" disabled={loading || !body.trim()}>
             {loading ? "Saving…" : "Add sticky"}
           </Button>
         </form>
       ) : (
-        <p className="text-xs text-muted-foreground">Sign in to add sticky notes.</p>
+        <p className="text-xs leading-relaxed text-foreground">
+          Sign in to add sticky notes — the API stores an author id for this case (same Row Level Security rules as other
+          case contributions).
+        </p>
       )}
 
       <ul className="space-y-3">
         {initial.map(({ sticky, replies }) => {
-          const mine = currentUserId && sticky.author_id === currentUserId;
+          const canDelete = Boolean(currentUserCanDelete);
           return (
-            <li key={sticky.id} className="rounded-md border border-amber-500/25 bg-amber-950/10 p-3">
-              <div className="flex justify-between gap-2 items-start">
-                <p className="text-[11px] text-muted-foreground">
-                  {authorLabel(sticky.author_id)}{" "}
-                  <span className="text-muted-foreground">
-                    {new Date(sticky.created_at).toLocaleString()}
-                  </span>
+            <li key={sticky.id} className="rounded-md border border-border bg-panel p-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[11px] text-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <AuthorPersonaLine profile={getProfile(sticky.author_id)} fallbackId={sticky.author_id} />
+                  <span className="text-foreground/80">{new Date(sticky.created_at).toLocaleString()}</span>
                 </p>
-                {mine ? (
+                {canDelete ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -128,10 +137,12 @@ export function EvidenceStickyNotesPanel({
               </div>
               <p className="text-sm text-foreground whitespace-pre-wrap mt-1">{sticky.body}</p>
               {replies.length > 0 ? (
-                <ul className="mt-2 ml-3 border-l border-zinc-700 pl-3 space-y-2">
+                <ul className="ml-3 mt-2 space-y-2 border-l border-border pl-3">
                   {replies.map((r) => (
                     <li key={r.id} className="text-xs text-foreground">
-                      <span className="text-muted-foreground">{authorLabel(r.author_id)} · </span>
+                      <span className="text-foreground/85 inline-flex items-center gap-1">
+                        <AuthorPersonaLine profile={getProfile(r.author_id)} fallbackId={r.author_id} /> ·{" "}
+                      </span>
                       {new Date(r.created_at).toLocaleString()}
                       <p className="text-sm mt-0.5 whitespace-pre-wrap">{r.body}</p>
                     </li>
@@ -147,7 +158,7 @@ export function EvidenceStickyNotesPanel({
                     }
                     rows={1}
                     placeholder="Reply…"
-                    className="bg-zinc-950 border-zinc-700 text-xs min-h-[2rem]"
+                    className="min-h-[2rem] text-xs"
                   />
                   <Button
                     type="button"

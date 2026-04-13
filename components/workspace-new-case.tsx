@@ -16,7 +16,7 @@ export function WorkspaceNewCaseButton({
     <CreateCaseDialog disabled={disabled}>
       <Button size={size} variant={variant} className={cn(fullWidth && "w-full", "gap-2", className)} disabled={disabled}>
         <Plus className="h-4 w-4" />
-        New case
+        New investigation
       </Button>
     </CreateCaseDialog>
   );

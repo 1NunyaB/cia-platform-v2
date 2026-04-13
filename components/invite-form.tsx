@@ -93,7 +93,8 @@ export function InviteForm({ caseId }: { caseId: string }) {
         </Alert>
       ) : null}
       <p className="text-xs text-muted-foreground">
-        TODO: Add accept-invite page + match email to user; token is stored for audit.
+        Recipients open <code className="text-[10px]">/invite/&lt;token&gt;</code>, sign in with the invited email,
+        and accept (see migration <code className="text-[10px]">026_accept_case_invite_rpc.sql</code>).
       </p>
       <Button type="submit" disabled={loading}>
         {loading ? "Sending…" : "Create invite"}

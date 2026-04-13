@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { listRecentDashboardChat } from "@/services/collaboration-service";
+import {
+  getActiveDashboardChatMute,
+  listRecentDashboardChat,
+  searchDashboardChat,
+} from "@/services/collaboration-service";
 import {
   checkDashboardChatRate,
   persistDashboardChatRateAfterSend,
@@ -11,7 +15,7 @@ const postSchema = z.object({
   body: z.string().min(1),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,9 +23,19 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const { searchParams } = new URL(request.url);
+  const q = (searchParams.get("q") ?? "").trim();
   try {
-    const messages = await listRecentDashboardChat(supabase, 80);
-    return NextResponse.json({ messages });
+    const messages =
+      q.length >= 2 ? await searchDashboardChat(supabase, q, 200) : await listRecentDashboardChat(supabase, 200);
+    const mute = await getActiveDashboardChatMute(supabase, user.id);
+    return NextResponse.json({
+      messages,
+      muted_until: mute?.muted_until ?? null,
+      muted_reason: mute?.reason ?? null,
+      current_user_id: user.id,
+      is_admin: user.email?.trim().toLowerCase() === "kesmall7712@gmail.com",
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to load chat";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -52,6 +66,17 @@ export async function POST(request: Request) {
   const rate = await checkDashboardChatRate(supabase, user.id, parsed.data.body);
   if (!rate.allowed) {
     return NextResponse.json({ error: rate.message }, { status: 429 });
+  }
+
+  const mute = await getActiveDashboardChatMute(supabase, user.id);
+  if (mute) {
+    return NextResponse.json(
+      {
+        error: `You are muted in workspace chat until ${new Date(mute.muted_until).toLocaleTimeString()}.`,
+        muted_until: mute.muted_until,
+      },
+      { status: 403 },
+    );
   }
 
   try {

@@ -13,3 +13,10 @@ export const EXTRACTION_NO_USABLE_TEXT_PLACEHOLDER =
  */
 export const URL_IMPORT_PDF_NO_TEXT_LAYER_PLACEHOLDER =
   "[No text extracted from PDF — no text layer in the downloaded bytes. Upload the PDF as a file for OCR.]";
+
+/** True when stored text is empty or only a known “no usable text” placeholder (re-run OCR may help). */
+export function isExtractionPlaceholderText(text: string | null | undefined): boolean {
+  const t = (text ?? "").trim();
+  if (!t) return true;
+  return t.startsWith("[No text extracted");
+}

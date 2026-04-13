@@ -1,25 +1,34 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { InviteAcceptActions } from "@/components/invite-accept-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-/**
- * TODO: Accept invite flow — verify logged-in user email matches case_invites.email,
- * insert case_members with role, set accepted_at. May require RPC with SECURITY DEFINER
- * or service role to read invite by token.
- */
-export default function InviteTokenPage() {
+export default async function InviteTokenPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const nextPath = `/invite/${encodeURIComponent(token)}`;
+  const loginHref = `/login?next=${encodeURIComponent(nextPath)}`;
+
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <Card className="max-w-md">
         <CardHeader>
-          <CardTitle>Invite</CardTitle>
+          <CardTitle>Case invitation</CardTitle>
           <CardDescription>
-            Invite acceptance is not wired in this scaffold. Implement token validation and membership insert in a
-            server action or route handler.
+            Accept to join the case with the role specified in the invite. You must use the same email address the
+            invitation was sent to.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            See <code className="text-xs">case_invites</code> table and{" "}
-            <code className="text-xs">InviteForm</code> for context.
+        <CardContent className="space-y-4">
+          <InviteAcceptActions token={token} isLoggedIn={!!user} loginHref={loginHref} />
+          <p className="text-xs text-muted-foreground">
+            Wrong account?{" "}
+            <Link href={loginHref} className="underline">
+              Switch account
+            </Link>
           </p>
         </CardContent>
       </Card>
