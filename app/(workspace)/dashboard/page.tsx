@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { listRecentDashboardChat } from "@/services/collaboration-service";
-import { fetchProfilesByIds } from "@/lib/profiles";
 import {
   getEvidenceCaseMembershipCounts,
   getEvidenceContentDuplicatePeerFlags,
@@ -13,7 +11,6 @@ import {
 import { DashboardMainPanels } from "@/components/dashboard-main-panels";
 import { Button } from "@/components/ui/button";
 import { getGuestSessionIdFromCookies } from "@/lib/guest-session";
-import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 
 export default async function DashboardPage({
   searchParams,
@@ -43,7 +40,7 @@ export default async function DashboardPage({
         </div>
         <div className="flex flex-wrap gap-2 rounded-lg border border-sky-300/80 bg-sky-50/90 px-3 py-3 shadow-sm">
           <Button asChild className="bg-primary text-primary-foreground">
-            <Link href="/evidence">Evidence library</Link>
+            <Link href="/evidence">Evidence Library</Link>
           </Button>
           <Button variant="outline" asChild className="border-border bg-card text-foreground">
             <Link href="/login">Sign in</Link>
@@ -59,16 +56,6 @@ export default async function DashboardPage({
       </div>
     );
   }
-
-  let chatMessages: Awaited<ReturnType<typeof listRecentDashboardChat>> = [];
-  try {
-    chatMessages = await listRecentDashboardChat(supabase, 200);
-  } catch {
-    chatMessages = [];
-  }
-
-  const chatAuthorIds = [...new Set(chatMessages.map((m) => m.author_id).filter(Boolean))] as string[];
-  const chatProfiles = await fetchProfilesByIds(supabase, chatAuthorIds);
 
   let evidenceRows: {
     id: string;
@@ -169,7 +156,7 @@ export default async function DashboardPage({
           <Link href="/cases/new">New investigation</Link>
         </Button>
         <Button asChild size="sm" variant="secondary" className="border-border bg-card text-foreground shadow-sm">
-          <Link href="/evidence">Evidence library (all files)</Link>
+          <Link href="/evidence">Evidence Library (all files)</Link>
         </Button>
         <Button asChild size="sm" variant="secondary" className="border-border bg-card text-foreground shadow-sm">
           <Link href="/evidence/add">Upload to library without opening a case</Link>
@@ -179,17 +166,13 @@ export default async function DashboardPage({
         </Button>
       </nav>
       <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
-        <span className="font-medium text-foreground">Evidence library</span> lists every file you can access.{" "}
+        <span className="font-medium text-foreground">Evidence Library</span> lists every file you can access.{" "}
         <span className="font-medium text-foreground">Current case evidence</span> is the list on an open case
         workspace — only items linked to that investigation.
       </p>
 
       <DashboardMainPanels
-        chatMessages={chatMessages}
-        chatProfiles={chatProfiles}
         evidenceRows={evidenceRows}
-        currentUserId={user?.id ?? null}
-        isPlatformAdmin={isPlatformDeleteAdmin(user)}
       />
     </div>
   );

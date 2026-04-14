@@ -11,6 +11,7 @@ import { logActivity } from "@/services/activity-service";
 import { recordContribution } from "@/services/contributions-service";
 import { resolveAndEnsureSourcePlatform } from "@/services/source-platform-catalog";
 import { isExtractionPlaceholderText } from "@/lib/extraction-messages";
+import { inferSuggestedEvidenceKind, type EvidenceKind } from "@/lib/evidence-kind";
 
 export const EVIDENCE_BUCKET = "evidence";
 
@@ -242,6 +243,7 @@ export async function registerGuestEvidenceFile(
       userAgent?: string | null;
       uploadMethod?: EvidenceUploadMethod | null;
     };
+    suggestedEvidenceKind?: EvidenceKind | null;
   },
 ) {
   const src = input.source;
@@ -272,6 +274,8 @@ export async function registerGuestEvidenceFile(
     originalFilename: input.originalFilename,
   });
   const shortAlias = composeShortAlias(seedPack.base, sequence);
+  const suggestedKind =
+    input.suggestedEvidenceKind ?? inferSuggestedEvidenceKind(input.mimeType, input.originalFilename);
 
   const { data, error } = await supabase
     .from("evidence_files")
@@ -285,6 +289,7 @@ export async function registerGuestEvidenceFile(
       mime_type: input.mimeType,
       file_size: input.fileSize,
       content_sha256: input.contentSha256 ?? null,
+      suggested_evidence_kind: suggestedKind,
       processing_status: input.processingStatus ?? "pending",
       file_sequence_number: sequence,
       display_filename: displayFilename,
@@ -530,6 +535,13 @@ export async function registerEvidenceFile(
       userAgent?: string | null;
       uploadMethod?: EvidenceUploadMethod | null;
     };
+    /** Manual crop/edit derivative — provenance to root original (`__0001` chain). */
+    derivedFromEvidenceId?: string | null;
+    derivativeIndex?: number | null;
+    /** 1-based source PDF page for `derivative_pdf_page` uploads; null otherwise. */
+    derivativeSourcePage?: number | null;
+    /** Override heuristic kind (defaults from MIME + filename). */
+    suggestedEvidenceKind?: EvidenceKind | null;
   },
 ) {
   const src = input.source;
@@ -564,6 +576,8 @@ export async function registerEvidenceFile(
     originalFilename: input.originalFilename,
   });
   const shortAlias = composeShortAlias(seedPack.base, sequence);
+  const suggestedKind =
+    input.suggestedEvidenceKind ?? inferSuggestedEvidenceKind(input.mimeType, input.originalFilename);
 
   const { data, error } = await supabase
     .from("evidence_files")
@@ -576,6 +590,7 @@ export async function registerEvidenceFile(
       mime_type: input.mimeType,
       file_size: input.fileSize,
       content_sha256: input.contentSha256 ?? null,
+      suggested_evidence_kind: suggestedKind,
       processing_status: input.processingStatus ?? "pending",
       file_sequence_number: sequence,
       display_filename: displayFilename,
@@ -588,6 +603,15 @@ export async function registerEvidenceFile(
             source_platform: effectiveSource.source_platform,
             source_program: effectiveSource.source_program,
             source_url: effectiveSource.source_url,
+          }
+        : {}),
+      ...(input.derivedFromEvidenceId != null && input.derivativeIndex != null
+        ? {
+            derived_from_evidence_id: input.derivedFromEvidenceId,
+            derivative_index: input.derivativeIndex,
+            ...(input.derivativeSourcePage != null
+              ? { derivative_source_page: input.derivativeSourcePage }
+              : {}),
           }
         : {}),
     })
@@ -647,6 +671,60 @@ export async function registerEvidenceFile(
   return { id: evidenceId };
 }
 
+/**
+ * Bulk attach evidence to a case. Failures are per-row; does not stop the batch.
+ * - Unassigned (`case_id` null): sets primary case via `assignEvidenceToCase`.
+ * - Already on a different case: adds `evidence_case_memberships` via `linkEvidenceToAdditionalCase`.
+ * - Already linked to target: no-op success.
+ */
+export async function bulkAssignEvidenceToCase(
+  supabase: AppSupabaseClient,
+  input: { evidenceIds: string[]; targetCaseId: string; userId: string },
+): Promise<{ results: { evidenceId: string; ok: boolean; error?: string }[] }> {
+  const results: { evidenceId: string; ok: boolean; error?: string }[] = [];
+  const target = input.targetCaseId;
+  for (const evidenceId of input.evidenceIds) {
+    try {
+      const { data: row, error: fetchErr } = await supabase
+        .from("evidence_files")
+        .select("case_id")
+        .eq("id", evidenceId)
+        .maybeSingle();
+      if (fetchErr) throw new Error(fetchErr.message);
+      if (!row) throw new Error("Evidence not found");
+
+      const cid = row.case_id as string | null;
+      if (cid === target) {
+        results.push({ evidenceId, ok: true });
+        continue;
+      }
+      if (cid == null) {
+        await assignEvidenceToCase(supabase, { evidenceId, caseId: target, userId: input.userId });
+      } else {
+        try {
+          await linkEvidenceToAdditionalCase(supabase, {
+            evidenceId,
+            targetCaseId: target,
+            userId: input.userId,
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("already linked")) {
+            results.push({ evidenceId, ok: true });
+            continue;
+          }
+          throw e;
+        }
+      }
+      results.push({ evidenceId, ok: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({ evidenceId, ok: false, error: msg });
+    }
+  }
+  return { results };
+}
+
 /** Attach library evidence to a case (membership row + primary case_id). RLS handles case collaboration rights. */
 export async function assignEvidenceToCase(
   supabase: AppSupabaseClient,
@@ -702,6 +780,31 @@ export async function linkEvidenceToAdditionalCase(
     }
     throw new Error(insErr.message);
   }
+}
+
+/** Mark multiple evidence rows as viewed; per-row failures do not stop the batch. */
+export async function bulkMarkEvidenceViewed(
+  supabase: AppSupabaseClient,
+  input: { evidenceIds: string[]; userId: string },
+): Promise<{ results: { evidenceId: string; ok: boolean; error?: string }[] }> {
+  const results: { evidenceId: string; ok: boolean; error?: string }[] = [];
+  const now = new Date().toISOString();
+  for (const evidenceId of input.evidenceIds) {
+    const { error } = await supabase.from("evidence_file_views").upsert(
+      {
+        user_id: input.userId,
+        evidence_file_id: evidenceId,
+        viewed_at: now,
+      },
+      { onConflict: "user_id,evidence_file_id" },
+    );
+    if (error) {
+      results.push({ evidenceId, ok: false, error: error.message });
+    } else {
+      results.push({ evidenceId, ok: true });
+    }
+  }
+  return { results };
 }
 
 /** All evidence files visible to the current user (RLS). */

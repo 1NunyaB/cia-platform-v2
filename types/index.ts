@@ -116,7 +116,12 @@ export type CaseMember = {
 };
 
 /** Ingest path for internal audit (`evidence_upload_audit`); not shown on default evidence surfaces. */
-export type EvidenceUploadMethod = "single_file" | "bulk" | "url_import";
+export type EvidenceUploadMethod =
+  | "single_file"
+  | "bulk"
+  | "url_import"
+  | "derivative_crop"
+  | "derivative_pdf_page";
 
 /** Internal audit row — RLS blocks SELECT for authenticated users; inspect via service_role / admin tooling. */
 export type EvidenceUploadAuditRow = {
@@ -157,6 +162,11 @@ export type EvidenceFile = {
   alias_seed_type?: string | null;
   /** SHA-256 hex of file bytes at upload; used for duplicate detection. */
   content_sha256?: string | null;
+  /** Heuristic kind from MIME/filename at upload (separate from case stacks). */
+  suggested_evidence_kind?: string | null;
+  /** User-confirmed kind after review; null until confirmed. */
+  confirmed_evidence_kind?: string | null;
+  evidence_kind_confirmed_at?: string | null;
 };
 
 export type ExtractedText = {

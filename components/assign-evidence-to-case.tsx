@@ -14,9 +14,12 @@ import {
 export function AssignEvidenceToCase({
   evidenceId,
   cases,
+  layout = "default",
 }: {
   evidenceId: string;
   cases: { id: string; title: string }[];
+  /** `toolbar`: single row for Evidence processing action bar. */
+  layout?: "default" | "toolbar";
 }) {
   const router = useRouter();
   const [caseId, setCaseId] = useState<string>("");
@@ -38,7 +41,7 @@ export function AssignEvidenceToCase({
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Could not assign to case.");
+        setError(data.error ?? "Could not add to case.");
         return;
       }
       router.push(`/cases/${caseId}/evidence/${evidenceId}`);
@@ -56,11 +59,41 @@ export function AssignEvidenceToCase({
     );
   }
 
+  if (layout === "toolbar") {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={caseId} onValueChange={setCaseId}>
+          <SelectTrigger className="h-8 w-[min(220px,100%)] border-sky-400/80 bg-white text-xs text-foreground">
+            <SelectValue placeholder="Select case…" />
+          </SelectTrigger>
+          <SelectContent>
+            {cases.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="h-8 border-sky-500 bg-sky-50 text-foreground hover:bg-sky-100"
+          disabled={loading || !caseId}
+          onClick={() => void submit()}
+        >
+          {loading ? "Adding…" : "Add to case"}
+        </Button>
+        {error ? <p className="w-full text-xs font-medium text-red-900">{error}</p> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[200px] flex-1 space-y-1">
-          <label className="text-xs font-medium text-foreground">Add to investigation</label>
+          <label className="text-xs font-medium text-foreground">Add to case</label>
           <Select value={caseId} onValueChange={setCaseId}>
             <SelectTrigger>
               <SelectValue placeholder="Select a case…" />
@@ -75,7 +108,7 @@ export function AssignEvidenceToCase({
           </Select>
         </div>
         <Button type="button" size="sm" disabled={loading || !caseId} onClick={() => void submit()}>
-          {loading ? "Assigning…" : "Assign"}
+          {loading ? "Adding…" : "Add to case"}
         </Button>
       </div>
       {error ? <p className="text-xs text-alert-foreground">{error}</p> : null}

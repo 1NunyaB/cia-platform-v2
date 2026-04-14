@@ -62,7 +62,7 @@ export function EvidenceTextSelectionSearch({
             href={`/evidence?q=${q}`}
             className="rounded border border-sky-300 bg-sky-50 px-2 py-1 text-blue-900 font-medium hover:bg-sky-100"
           >
-            Evidence library
+            Evidence Library
           </Link>
         </div>
       ) : null}

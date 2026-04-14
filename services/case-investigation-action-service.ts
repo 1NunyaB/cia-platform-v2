@@ -33,8 +33,9 @@ export async function runCaseInvestigationAction(
       confidence: "low",
       classification: "Uncertain",
       reasoning: "Without extractable text, conclusions must remain minimal.",
-      limitations: "Upload text-based documents or add OCR, then run per-file extraction before case-level review.",
-      next_step: "Add extractable evidence and re-run this action.",
+      limitations:
+        "No readable text was available across case files yet — open evidence files from the library so text can be prepared for analysis.",
+      next_step: "Add or open evidence files, then re-run this action.",
     };
     const ctx: AnalysisPipelineContext = { scope: "case_investigation", caseAction: action };
     let finding = normalizeStructuredFinding(weak);

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getGuestSessionIdFromCookies } from "@/lib/guest-session";
 import { tryCreateServiceClient } from "@/lib/supabase/service";
 import { listEvidenceVisible, listGuestEvidence } from "@/services/evidence-service";
+import Link from "next/link";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 import { MediaEvidenceBrowser } from "@/components/media-evidence-browser";
 
@@ -47,6 +48,11 @@ export default async function AudioAnalyzerPage() {
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6">
       <div className="space-y-1">
+        <p className="text-sm">
+          <Link href="/analyze" className="font-medium text-primary hover:underline">
+            ← Analyze hub
+          </Link>
+        </p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Audio Analyzer</h1>
         <p className="text-sm text-muted-foreground">
           Review uploaded audio evidence with playback, waveform foundation, and timeline scrubbing. Layout is ready

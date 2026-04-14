@@ -1,84 +1,139 @@
+"use client";
+
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { CheckCircle2, FolderPlus, Loader2, Sparkles, XCircle } from "lucide-react";
+import { dispatchWorkspaceAiAttachEvidence } from "@/lib/workspace-evidence-ai-bridge";
 import type { EvidenceProcessingStatus } from "@/types";
-import { AnalyzeButton } from "@/components/analyze-button";
-import { RunEvidenceExtractionButton } from "@/components/run-evidence-extraction-button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
+function CompactLine({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex gap-2 text-[11px] leading-snug text-foreground">
+      <span className="mt-0.5 shrink-0 text-foreground" aria-hidden>
+        {icon}
+      </span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
 
 /**
- * Readable extraction vs analysis state for manual reviewers (upload is implied OK when this page loads).
+ * Primary workflow: upload → view → zoom → crop/edit → analyze. No extraction step in the UI.
  */
 export function EvidenceWorkflowStatusCard({
   processingStatus,
-  extractionStatus,
-  hasDisplayableExtract,
-  hasAnalysis,
-  needsExtraction,
   evidenceId,
+  uploadHref,
+  assignControl,
+  deleteControl,
+  processingErrorMessage = null,
+  evidenceDisplayLabel = null,
+  caseIdForWorkspaceAi = null,
 }: {
   processingStatus: EvidenceProcessingStatus;
-  extractionStatus: string | null | undefined;
-  hasDisplayableExtract: boolean;
-  hasAnalysis: boolean;
-  needsExtraction: boolean;
   evidenceId: string;
+  uploadHref: string;
+  assignControl?: ReactNode;
+  deleteControl?: ReactNode;
+  processingErrorMessage?: string | null;
+  evidenceDisplayLabel?: string | null;
+  caseIdForWorkspaceAi?: string | null;
 }) {
-  const ex = String(extractionStatus ?? "pending").toLowerCase();
-  const extractLine = hasDisplayableExtract
-    ? "Extracted text is available for this file."
-    : ex === "limited"
-      ? "This appears to be primarily image/photo evidence. OCR found limited incidental text."
-      : ex === "low_confidence"
-        ? "This appears to be primarily image/photo evidence. OCR text is low-confidence."
-    : ex === "failed" || ex === "unavailable" || ex === "retry_needed" || processingStatus === "error"
-      ? "Extraction failed or needs a retry."
-      : processingStatus === "extracting"
-        ? "Extraction is running."
-        : "No usable extracted text yet.";
+  const uploadBlocked = processingStatus === "blocked";
+  const uploadInFlight = processingStatus === "pending" || processingStatus === "scanning";
+  const uploadReady =
+    !uploadBlocked &&
+    !uploadInFlight &&
+    (processingStatus === "accepted" ||
+      processingStatus === "extracting" ||
+      processingStatus === "analyzing" ||
+      processingStatus === "complete" ||
+      processingStatus === "error");
 
-  const analysisLine = ex === "limited" || ex === "low_confidence"
-    ? "Use this as visual evidence first (scene/object review). You can still retry extraction after manual zoom/review."
-    : !hasDisplayableExtract
-    ? "Run extraction first; analysis uses extracted text."
-    : hasAnalysis
-      ? "AI analysis is on file."
-      : "Analysis has not been run yet.";
+  const processingErrored = processingStatus === "error";
 
   return (
-    <Card className="border-border bg-white shadow-sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base text-foreground">Evidence processing</CardTitle>
-        <CardDescription className="text-foreground/90">
-          Upload, text extraction, and AI analysis are tracked separately. Extraction results are shared for everyone who
-          can open this evidence.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm text-foreground">
-        <div className="rounded-md border border-sky-200 bg-sky-50/90 px-3 py-2">
-          <p className="font-semibold text-foreground">Upload</p>
-          <p className="mt-0.5 text-foreground/95">File stored successfully.</p>
-        </div>
-        <div className="rounded-md border border-border bg-panel px-3 py-2 space-y-2">
-          <p className="font-semibold text-foreground">Text extraction</p>
-          <p className="text-foreground/95">{extractLine}</p>
-          {needsExtraction ? (
-            <RunEvidenceExtractionButton
-              evidenceId={evidenceId}
-              label={hasDisplayableExtract ? "Retry extraction" : "Extract now"}
-              variant="default"
-            />
-          ) : hasDisplayableExtract ? (
-            <p className="text-xs text-muted-foreground">No further extraction action needed unless you retry.</p>
-          ) : null}
-        </div>
-        <div className="rounded-md border border-border bg-panel px-3 py-2 space-y-2">
-          <p className="font-semibold text-foreground">AI analysis</p>
-          <p className="text-foreground/95">{analysisLine}</p>
-          {hasDisplayableExtract && !hasAnalysis ? (
-            <AnalyzeButton evidenceId={evidenceId} />
-          ) : hasAnalysis ? (
-            <p className="text-xs text-muted-foreground">Analysis is available; use case panels for full detail.</p>
-          ) : null}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-2 text-xs text-foreground">
+      <div className="space-y-1.5 rounded-md border border-sky-200/90 bg-sky-50/90 px-2.5 py-2">
+        <CompactLine
+          icon={
+            uploadBlocked ? (
+              <XCircle className="h-4 w-4 text-red-900" />
+            ) : uploadInFlight ? (
+              <Loader2 className="h-4 w-4 animate-spin text-sky-800" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-800" />
+            )
+          }
+        >
+          <span className="font-semibold">File uploaded successfully</span>
+          <span className="text-foreground/95">
+            {" "}
+            —{" "}
+            {uploadBlocked ? "not stored" : uploadInFlight ? "finishing security scan" : "stored"}
+          </span>
+        </CompactLine>
+
+        <CompactLine icon={<FolderPlus className="h-4 w-4 text-sky-900" />}>
+          <span className="font-semibold">Add to case</span>
+          <span className="block text-foreground/95">{assignControl ?? "—"}</span>
+        </CompactLine>
+
+        <CompactLine icon={<Sparkles className="h-4 w-4 text-indigo-800" />}>
+          <span className="font-semibold">Add to evidence stack(s)</span>
+          <span className="block text-[10px] text-foreground/90">
+            On the case workspace, add this file to investigation stacks (separate from Evidence type above).
+          </span>
+        </CompactLine>
+      </div>
+
+      {processingErrored && processingErrorMessage?.trim() ? (
+        <p className="rounded border border-red-300 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-950">
+          {processingErrorMessage.trim()}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+        <Button
+          asChild
+          variant="secondary"
+          size="sm"
+          className="h-8 border-border bg-card px-3 text-xs font-semibold text-foreground"
+        >
+          <Link href={uploadHref}>Upload</Link>
+        </Button>
+        <Button
+          asChild
+          variant="secondary"
+          size="sm"
+          className="h-8 border-sky-500 bg-white px-3 text-xs font-semibold text-foreground hover:bg-sky-50"
+        >
+          <a href="#evidence-file-preview">Open file view</a>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="h-8 border-sky-400 bg-sky-50 text-xs font-semibold">
+          <Link href={`/evidence/compare?a=${encodeURIComponent(evidenceId)}`}>Compare</Link>
+        </Button>
+        {uploadReady && !uploadBlocked && evidenceDisplayLabel ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 gap-1 border-sky-600 bg-sky-100 px-2 text-xs font-semibold text-sky-950 hover:bg-sky-200/80"
+            onClick={() =>
+              dispatchWorkspaceAiAttachEvidence({
+                evidenceId,
+                caseId: caseIdForWorkspaceAi,
+                label: evidenceDisplayLabel,
+              })
+            }
+          >
+            <Sparkles className="size-3.5 shrink-0" aria-hidden />
+            Send to AI
+          </Button>
+        ) : null}
+        {deleteControl ? <div className="ml-auto flex items-center">{deleteControl}</div> : null}
+      </div>
+    </div>
   );
 }

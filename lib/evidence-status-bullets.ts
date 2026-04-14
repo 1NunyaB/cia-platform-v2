@@ -3,7 +3,6 @@ import { evidenceRowNeedsAnalyzing } from "@/lib/evidence-row-needs";
 
 export type EvidenceStatusBulletKind =
   | "needs_attention"
-  | "needs_extraction"
   | "duplicate"
   | "viewed"
   | "multi_case"
@@ -19,7 +18,6 @@ export type EvidenceStatusBulletInput = {
   hasAiAnalysis: boolean;
   viewed: boolean;
   hasContentDuplicatePeer: boolean;
-  extractionStatus: string | null | undefined;
 };
 
 export const EVIDENCE_STATUS_BULLET_STYLES: Record<
@@ -28,46 +26,41 @@ export const EVIDENCE_STATUS_BULLET_STYLES: Record<
 > = {
   needs_attention: {
     dot: "bg-red-500",
-    label: "Blocked, failed, or needs attention",
-  },
-  needs_extraction: {
-    dot: "bg-amber-500",
-    label: "Needs extraction or extraction retry",
+    label: "Blocked — fix upload or review status",
   },
   duplicate: {
     dot: "bg-purple-500",
-    label: "Same file fingerprint as another item in your library",
+    label: "Possible duplicate — compare fingerprints",
   },
   viewed: {
     dot: "bg-teal-500",
-    label: "Opened before (viewed)",
+    label: "Opened before",
   },
   multi_case: {
     dot: "bg-indigo-500",
-    label: "Linked to more than one case",
+    label: "Add to evidence stack(s)",
   },
   needs_analysis: {
     dot: "bg-yellow-500",
-    label: "Needs AI analysis",
+    label: "Needs reviewing",
   },
   ai_available: {
     dot: "bg-green-500",
-    label: "AI analysis available",
+    label: "AI insights available — open to review",
   },
   in_case: {
     dot: "bg-blue-500",
-    label: "Included in a case",
+    label: "On case evidence",
   },
   library_only: {
     dot: "bg-slate-400",
-    label: "Library only (not on a case yet)",
+    label: "Add to case",
   },
 };
 
 /** Legend order — every kind the UI can show (MARKERS box). */
 export const EVIDENCE_STATUS_BULLET_LEGEND_ORDER: EvidenceStatusBulletKind[] = [
   "needs_attention",
-  "needs_extraction",
   "duplicate",
   "viewed",
   "multi_case",
@@ -79,7 +72,6 @@ export const EVIDENCE_STATUS_BULLET_LEGEND_ORDER: EvidenceStatusBulletKind[] = [
 
 const DISPLAY_ORDER: EvidenceStatusBulletKind[] = [
   "needs_attention",
-  "needs_extraction",
   "duplicate",
   "viewed",
   "multi_case",
@@ -88,23 +80,6 @@ const DISPLAY_ORDER: EvidenceStatusBulletKind[] = [
   "in_case",
   "library_only",
 ];
-
-function extractionNeedsAttention(input: EvidenceStatusBulletInput): boolean {
-  const ps = input.processingStatus;
-  const ex = String(input.extractionStatus ?? "pending").toLowerCase();
-  if (ps === "blocked" || ps === "error") return false;
-  if (ps === "extracting") return true;
-  if (
-    ex === "failed" ||
-    ex === "unavailable" ||
-    ex === "retry_needed" ||
-    ex === "limited" ||
-    ex === "low_confidence"
-  ) return true;
-  if (ex === "pending" && ps !== "complete") return true;
-  if (ps === "accepted") return true;
-  return false;
-}
 
 /**
  * All applicable bullets for a row. Always includes exactly one of `in_case` or `library_only`.
@@ -115,10 +90,6 @@ export function resolveEvidenceStatusBullets(input: EvidenceStatusBulletInput): 
 
   if (ps === "blocked" || ps === "error") {
     out.push("needs_attention");
-  }
-
-  if (extractionNeedsAttention(input)) {
-    out.push("needs_extraction");
   }
 
   if (input.hasContentDuplicatePeer) {
@@ -136,7 +107,6 @@ export function resolveEvidenceStatusBullets(input: EvidenceStatusBulletInput): 
   if (
     evidenceRowNeedsAnalyzing({
       processingStatus: input.processingStatus,
-      extractionStatus: input.extractionStatus,
       hasAiAnalysis: input.hasAiAnalysis,
     })
   ) {

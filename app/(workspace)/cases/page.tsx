@@ -45,7 +45,7 @@ export default async function CasesPage({
               <Link href="/login">Sign in</Link>
             </Button>
             <Button variant="secondary" asChild>
-              <Link href="/evidence">Evidence library</Link>
+              <Link href="/evidence">Evidence Library</Link>
             </Button>
           </CardContent>
         </Card>

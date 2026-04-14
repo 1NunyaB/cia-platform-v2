@@ -60,6 +60,12 @@ export async function POST(
     force,
   });
 
+  const { data: snap } = await client
+    .from("evidence_files")
+    .select("extraction_status, processing_status")
+    .eq("id", evidenceId)
+    .maybeSingle();
+
   if (actor.mode === "user") {
     await logUsageEvent({ userId: actor.userId, action: "evidence.extract", meta: { evidenceId } });
   } else {
@@ -91,5 +97,9 @@ export async function POST(
     }
   }
 
-  return NextResponse.json(result);
+  return NextResponse.json({
+    ...result,
+    extraction_status: (snap?.extraction_status as string | null) ?? null,
+    processing_status: (snap?.processing_status as string | null) ?? null,
+  });
 }

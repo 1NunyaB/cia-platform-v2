@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 const ACTION_LABELS: Record<string, string> = {
   "evidence.opened": "Opened evidence",
   "evidence.compared": "Compared evidence",
-  "evidence.extract": "Ran extraction",
+  "evidence.extract": "Prepared evidence for analysis",
   "evidence.analyze": "Ran analysis",
   "cluster.viewed": "Viewed full cluster",
   "timeline.drilldown": "Used timeline drilldown",
@@ -62,8 +62,8 @@ export default async function PersonalInteractionTimelinePage({
         <CardHeader className="pb-2">
           <CardTitle className="text-base text-foreground">Your interaction events</CardTitle>
           <CardDescription>
-            Evidence opens, compare actions, extraction/analysis runs, cluster views, note/comment actions, and timeline
-            drilldowns are recorded here.
+            Evidence opens, compare actions, analysis runs, cluster views, note/comment actions, and timeline drilldowns
+            are recorded here.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -2,7 +2,6 @@ import { ingestUploadedFile } from "@/services/case-evidence-ingest";
 import { buildDuplicateEvidenceResponse } from "@/services/duplicate-evidence-response";
 import { EvidenceDuplicateError, isClientSafeUploadError } from "@/lib/evidence-upload-errors";
 import { parseEvidenceSourceFromFormData } from "@/lib/evidence-source";
-import { deferExtractionFromFormData } from "@/lib/evidence-defer-extraction";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 import { requestClientIp, requestUserAgent } from "@/lib/request-audit";
 import { resolveRequestActor } from "@/lib/resolve-request-actor";
@@ -20,7 +19,6 @@ export type BulkEvidenceItemResult = {
   no_new_record?: boolean;
   message?: string;
   needs_extraction?: boolean;
-  deferred_extraction?: boolean;
   existing?: import("@/lib/evidence-upload-errors").DuplicateEvidenceMatch;
 };
 
@@ -47,8 +45,6 @@ export async function POST(
   const single = formData.get("file");
   const uploaderIp = requestClientIp(request);
   const userAgent = requestUserAgent(request);
-  const deferExtraction = deferExtractionFromFormData(formData);
-
   if (multi.length > 0) {
     const results: BulkEvidenceItemResult[] = [];
     for (const file of multi) {
@@ -59,7 +55,6 @@ export async function POST(
           file,
           source,
           forceDuplicate,
-          deferExtraction,
           audit: { uploaderIp, userAgent, uploadMethod: "bulk" },
         });
         await logUsageEvent({
@@ -71,7 +66,6 @@ export async function POST(
           filename: file.name,
           id: r.id,
           ...(r.warning ? { warning: r.warning } : {}),
-          ...(r.deferred_extraction ? { deferred_extraction: true } : {}),
         });
       } catch (e) {
         if (e instanceof EvidenceDuplicateError) {
@@ -101,7 +95,6 @@ export async function POST(
         file: single,
         source,
         forceDuplicate,
-        deferExtraction,
         audit: { uploaderIp, userAgent, uploadMethod: "single_file" },
       });
       await logUsageEvent({
@@ -110,13 +103,7 @@ export async function POST(
         meta: { scope: "case", caseId, method: "single_file" },
       });
       if (r.warning) {
-        return NextResponse.json(
-          { id: r.id, warning: r.warning, ...(r.deferred_extraction ? { deferred_extraction: true } : {}) },
-          { status: 201 },
-        );
-      }
-      if (r.deferred_extraction) {
-        return NextResponse.json({ id: r.id, deferred_extraction: true }, { status: 201 });
+        return NextResponse.json({ id: r.id, warning: r.warning }, { status: 201 });
       }
       return NextResponse.json({ id: r.id }, { status: 201 });
     } catch (e) {

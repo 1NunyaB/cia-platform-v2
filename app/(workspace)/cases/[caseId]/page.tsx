@@ -109,6 +109,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
     source_platform: row.source_platform != null ? String(row.source_platform) : null,
     source_program: row.source_program != null ? String(row.source_program) : null,
     source_url: row.source_url != null ? String(row.source_url) : null,
+    suggested_evidence_kind:
+      row.suggested_evidence_kind != null ? String(row.suggested_evidence_kind) : "document",
+    confirmed_evidence_kind: row.confirmed_evidence_kind != null ? String(row.confirmed_evidence_kind) : null,
   }));
 
   return (
@@ -151,6 +154,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
         snapshot={indexSnapshot}
         evidence={evidenceIndexRows}
         evidenceUploadSlot={<CaseEvidenceAddPanel caseId={caseId} />}
+        allowBulkActions={Boolean(user)}
       />
 
       <CaseEvidenceClustersCard

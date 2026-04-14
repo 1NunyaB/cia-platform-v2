@@ -16,14 +16,11 @@ import {
 } from "@/lib/workspace-notes-storage";
 import { parseWorkspaceRouteContext } from "@/lib/workspace-route-context";
 import { cn } from "@/lib/utils";
-import {
-  EXTRACTION_REMINDER_EVENT,
-  type ExtractionReminderDetail,
-} from "@/lib/extraction-reminder-event";
-
 type WorkspaceNotesPanelProps = {
   ownerKey: string;
   canDelete: boolean;
+  /** Tighter layout for the narrow sidebar notes stack. */
+  density?: "default" | "compact";
 };
 
 function formatNoteTimestamp(iso: string): string {
@@ -67,7 +64,7 @@ function evidenceLinkMarkdown(path: string): string {
   return `\n[Evidence](${path})\n`;
 }
 
-export function WorkspaceNotesPanel({ ownerKey, canDelete }: WorkspaceNotesPanelProps) {
+export function WorkspaceNotesPanel({ ownerKey, canDelete, density = "default" }: WorkspaceNotesPanelProps) {
   const pathname = usePathname();
   const route = React.useMemo(() => parseWorkspaceRouteContext(pathname), [pathname]);
 
@@ -125,35 +122,6 @@ export function WorkspaceNotesPanel({ ownerKey, canDelete }: WorkspaceNotesPanel
     },
     [storageKey],
   );
-
-  React.useEffect(() => {
-    const onReminder = (e: Event) => {
-      const ce = e as CustomEvent<ExtractionReminderDetail>;
-      const d = ce.detail;
-      if (!d?.evidenceId || !d.href) return;
-      const marker = `[reminder:extraction:${d.evidenceId}]`;
-      if (notesRef.current.some((n) => n.body.includes(marker))) return;
-      const t = new Date().toISOString();
-      const noteCaseId = d.caseId?.trim() ? d.caseId : undefined;
-      const body = `${marker}\n\nUpload succeeded, but text extraction did not finish.\nFile: ${d.filename}\nOpen: [Evidence](${d.href})\nUse **Run extraction** on that page when you are ready.\n`;
-      const note: WorkspaceNote = {
-        id: crypto.randomUUID(),
-        title: `Extraction — ${d.filename}`,
-        body,
-        createdAt: t,
-        updatedAt: t,
-        ...(noteCaseId ? { caseId: noteCaseId } : {}),
-      };
-      setNotes((prev) => {
-        const next = [note, ...prev];
-        persistSoon(next);
-        return next;
-      });
-      setActiveNoteId(note.id);
-    };
-    window.addEventListener(EXTRACTION_REMINDER_EVENT, onReminder);
-    return () => window.removeEventListener(EXTRACTION_REMINDER_EVENT, onReminder);
-  }, [persistSoon]);
 
   React.useEffect(() => {
     return () => {
@@ -260,11 +228,16 @@ export function WorkspaceNotesPanel({ ownerKey, canDelete }: WorkspaceNotesPanel
     [persistSoon],
   );
 
+  const compact = density === "compact";
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className={cn("flex min-h-0 flex-col", compact ? "gap-2" : "flex-1 gap-3")}>
       {route.caseId && (
         <div
-          className="flex shrink-0 rounded-md border border-border bg-muted/30 p-0.5 text-[11px]"
+          className={cn(
+            "flex shrink-0 rounded-md border border-border bg-muted/30 p-0.5 text-[11px]",
+            compact && "[&_button]:py-1 [&_button]:text-[10px]",
+          )}
           role="group"
           aria-label="Note scope"
         >
@@ -296,15 +269,20 @@ export function WorkspaceNotesPanel({ ownerKey, canDelete }: WorkspaceNotesPanel
       )}
 
       {route.evidenceLinkPath && (
-        <div className="shrink-0 rounded-lg border border-dashed border-border bg-muted/20 px-2.5 py-2">
-          <p className="mb-1.5 text-[10px] leading-snug text-muted-foreground">
+        <div
+          className={cn(
+            "shrink-0 rounded-lg border border-dashed border-border bg-muted/20 px-2.5",
+            compact ? "py-1.5" : "py-2",
+          )}
+        >
+          <p className={cn("leading-snug text-muted-foreground", compact ? "mb-1 text-[9px]" : "mb-1.5 text-[10px]")}>
             Open evidence — insert a markdown link into the focused note (or create one).
           </p>
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            className="h-8 w-full gap-1.5 text-xs"
+            className={cn("w-full gap-1.5", compact ? "h-7 text-[10px]" : "h-8 text-xs")}
             onClick={insertEvidenceReference}
           >
             <Link2 className="size-3.5" aria-hidden />
@@ -317,7 +295,7 @@ export function WorkspaceNotesPanel({ ownerKey, canDelete }: WorkspaceNotesPanel
         type="button"
         variant="outline"
         size="sm"
-        className="w-full shrink-0 justify-center gap-1.5"
+        className={cn("w-full shrink-0 justify-center gap-1.5", compact && "h-7 text-[11px]")}
         onClick={addNote}
       >
         <Plus className="size-3.5" aria-hidden />
@@ -325,11 +303,13 @@ export function WorkspaceNotesPanel({ ownerKey, canDelete }: WorkspaceNotesPanel
       </Button>
 
       {visibleNotes.length === 0 ? (
-        <EmptyState title="No notes in this scope" className="py-6">
-          <p className="text-xs">Add a note above, or switch scope if you are on an investigation.</p>
+        <EmptyState title="No notes in this scope" className={compact ? "py-3" : "py-6"}>
+          <p className={compact ? "text-[10px] leading-snug" : "text-xs"}>
+            Add a note above, or switch scope if you are on an investigation.
+          </p>
         </EmptyState>
       ) : (
-        <ul className="flex flex-col gap-3 pb-1">
+        <ul className={cn("flex flex-col pb-1", compact ? "gap-2" : "gap-3")}>
           {visibleNotes.map((note) => (
             <li key={note.id}>
               <NoteCard
@@ -340,13 +320,19 @@ export function WorkspaceNotesPanel({ ownerKey, canDelete }: WorkspaceNotesPanel
                 onChangeBody={(v) => patchNote(note.id, { body: v })}
                 onRemove={() => removeNote(note.id)}
                 canDelete={canDelete}
+                compact={compact}
               />
             </li>
           ))}
         </ul>
       )}
 
-      <p className="mt-auto shrink-0 text-[10px] leading-snug text-muted-foreground">
+      <p
+        className={cn(
+          "shrink-0 leading-snug text-muted-foreground",
+          compact ? "mt-1 text-[9px]" : "mt-auto text-[10px]",
+        )}
+      >
         Personal notes on this device only — not shared with collaborators by default.
       </p>
     </div>
@@ -361,6 +347,7 @@ type NoteCardProps = {
   onChangeBody: (value: string) => void;
   onRemove: () => void;
   canDelete: boolean;
+  compact?: boolean;
 };
 
 function NoteCard({
@@ -371,6 +358,7 @@ function NoteCard({
   onChangeBody,
   onRemove,
   canDelete,
+  compact = false,
 }: NoteCardProps) {
   const created = formatNoteTimestamp(note.createdAt);
   const updated = formatNoteTimestamp(note.updatedAt);
@@ -384,14 +372,14 @@ function NoteCard({
         isActive && "ring-2 ring-ring/40",
       )}
     >
-      <div className="space-y-2 p-3">
+      <div className={cn("space-y-2", compact ? "p-2" : "p-3")}>
         <div className="flex items-start gap-1.5">
           <Input
             value={note.title}
             onChange={(e) => onChangeTitle(e.target.value)}
             onFocus={onActivate}
             placeholder="Title (optional)"
-            className="h-8 flex-1 text-sm font-medium"
+            className={cn("flex-1 font-medium", compact ? "h-7 text-xs" : "h-8 text-sm")}
             aria-label="Note title"
           />
           {canDelete ? (
@@ -399,7 +387,10 @@ function NoteCard({
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+              className={cn(
+                "shrink-0 text-muted-foreground hover:text-destructive",
+                compact ? "h-7 w-7" : "h-8 w-8",
+              )}
               onClick={onRemove}
               aria-label="Delete note"
             >
@@ -413,12 +404,17 @@ function NoteCard({
           onChange={(e) => onChangeBody(e.target.value)}
           onFocus={onActivate}
           placeholder="Write here…"
-          className="min-h-[88px] resize-y text-sm"
+          className={cn("resize-y", compact ? "min-h-[52px] text-xs" : "min-h-[88px] text-sm")}
           aria-label="Note body"
           spellCheck
         />
 
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/80 pt-2 text-[10px] text-muted-foreground">
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/80 text-muted-foreground",
+            compact ? "pt-1.5 text-[9px]" : "pt-2 text-[10px]",
+          )}
+        >
           <span title={updated}>Updated {updated}</span>
           {showBoth && (
             <>

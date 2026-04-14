@@ -12,7 +12,6 @@ type CliOptions = {
   sourceUrl?: string;
   extFilters: string[];
   nameRegex?: RegExp;
-  deferExtraction: boolean;
   limit?: number;
 };
 
@@ -48,7 +47,6 @@ function parseArgs(argv: string[]): CliOptions {
     .map((s) => (s.startsWith(".") ? s : `.${s}`));
 
   const nameRegex = kv.get("nameRegex") ? new RegExp(kv.get("nameRegex")!, "i") : undefined;
-  const deferExtraction = kv.get("deferExtraction") !== "false";
   const limit = kv.get("limit") ? Number(kv.get("limit")) : undefined;
 
   return {
@@ -60,7 +58,6 @@ function parseArgs(argv: string[]): CliOptions {
     sourceUrl: kv.get("sourceUrl") || undefined,
     extFilters,
     nameRegex,
-    deferExtraction,
     limit: Number.isFinite(limit) ? limit : undefined,
   };
 }
@@ -143,14 +140,11 @@ async function main() {
           ...sourceBase,
           source_url: args.sourceUrl ?? fileUrl,
         },
-        deferExtraction: args.deferExtraction,
         audit: { uploadMethod: "url_import" },
       });
       imported += 1;
       if (res.warning) {
         console.log(`IMPORTED (warning: ${res.warning})`);
-      } else if (res.deferred_extraction) {
-        console.log("IMPORTED (extraction deferred)");
       } else {
         console.log("IMPORTED");
       }

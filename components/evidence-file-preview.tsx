@@ -1,32 +1,155 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ZoomIn, ZoomOut } from "lucide-react";
 import { ProtectedEvidenceView } from "@/components/protected-evidence-view";
 import { InvestigationLoadingIndicator } from "@/components/investigation-loading-indicator";
+import { resolveEvidencePreviewKind } from "@/lib/evidence-preview-kind";
+import { EvidencePdfPageViewer } from "@/components/evidence-pdf-page-viewer";
+import { Button } from "@/components/ui/button";
 
-type FileUrlPayload = { url: string; mimeType: string | null; filename: string; viewerLabel: string };
+type FileUrlPayload = {
+  url: string;
+  streamUrl?: string;
+  mimeType: string | null;
+  filename: string;
+  viewerLabel: string;
+};
+
+const PREVIEW_UNAVAILABLE = "Preview unavailable for this file type.";
+
+function PreviewOpenFallback({
+  openHref,
+  title = "Preview unavailable. Click to open file.",
+  detail,
+}: {
+  openHref: string;
+  title?: string;
+  detail?: string | null;
+}) {
+  return (
+    <div
+      id="evidence-file-preview"
+      className="scroll-mt-4 rounded-lg border-2 border-amber-700/40 bg-amber-50 px-4 py-4 text-sm text-foreground"
+      role="status"
+    >
+      <p className="font-semibold text-foreground">{title}</p>
+      {detail ? <p className="mt-1 text-sm text-foreground/95">{detail}</p> : null}
+      <div className="mt-3">
+        <Button
+          asChild
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="border-sky-600 bg-white text-foreground shadow-sm hover:bg-sky-50"
+        >
+          <a href={openHref} target="_blank" rel="noopener noreferrer">
+            Open file
+          </a>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.25;
+
+function ZoomToolbar({
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onReset,
+}: {
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-300/90 bg-white px-2 py-1.5 shadow-sm">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground">View</span>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        className="h-7 gap-1 border-sky-400 bg-sky-50 px-2 text-xs text-foreground"
+        onClick={onZoomOut}
+        disabled={zoom <= ZOOM_MIN + 0.01}
+        aria-label="Zoom out"
+      >
+        <ZoomOut className="h-3.5 w-3.5" aria-hidden />
+        Out
+      </Button>
+      <Button type="button" size="sm" variant="secondary" className="h-7 border-border px-2 text-xs" onClick={onReset}>
+        {Math.round(zoom * 100)}%
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        className="h-7 gap-1 border-sky-400 bg-sky-50 px-2 text-xs text-foreground"
+        onClick={onZoomIn}
+        disabled={zoom >= ZOOM_MAX - 0.01}
+        aria-label="Zoom in"
+      >
+        <ZoomIn className="h-3.5 w-3.5" aria-hidden />
+        In
+      </Button>
+      <span className="text-[10px] text-foreground/80">Scroll the frame to pan when zoomed.</span>
+    </div>
+  );
+}
 
 /**
- * Loads a short-lived signed URL and shows an image, PDF iframe, or a clear fallback.
- * Visually separated from metadata (pale blue panel).
+ * Loads file-url, shows image / PDF / video inline with zoom and clear fallbacks (no text extraction).
  */
-export function EvidenceFilePreview({ evidenceId }: { evidenceId: string }) {
+export function EvidenceFilePreview({
+  evidenceId,
+  caseId = null,
+}: {
+  evidenceId: string;
+  /** Case context for stack picker on PDF page actions; omit on library-only views. */
+  caseId?: string | null;
+}) {
   const [payload, setPayload] = useState<FileUrlPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  const bumpZoom = useCallback((delta: number) => {
+    setZoom((z) => {
+      const n = Math.round((z + delta) * 100) / 100;
+      return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, n));
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/evidence/${evidenceId}/file-url`);
+        const res = await fetch(`/api/evidence/${evidenceId}/file-url`, { credentials: "include" });
         const data = (await res.json()) as FileUrlPayload & { error?: string };
         if (!res.ok) {
-          if (!cancelled) setError(data.error ?? "Could not load file preview.");
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[evidence-file-preview] file-url failed", evidenceId, res.status, data?.error);
+          }
+          if (!cancelled) setError(data.error ?? "Could not load preview metadata.");
           return;
         }
+        if (process.env.NODE_ENV === "development") {
+          console.info("[evidence-file-preview] file-url ok", {
+            evidenceId,
+            streamUrl: data.streamUrl ?? `/api/evidence/${evidenceId}/file`,
+            mimeType: data.mimeType,
+          });
+        }
         if (!cancelled) setPayload(data);
-      } catch {
-        if (!cancelled) setError("Could not load file preview.");
+      } catch (e) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[evidence-file-preview] file-url network error", evidenceId, e);
+        }
+        if (!cancelled) setError("Could not load preview. Try Open file.");
       }
     })();
     return () => {
@@ -34,70 +157,138 @@ export function EvidenceFilePreview({ evidenceId }: { evidenceId: string }) {
     };
   }, [evidenceId]);
 
+  const kind = useMemo(
+    () => resolveEvidencePreviewKind(payload?.mimeType ?? null, payload?.filename ?? null),
+    [payload?.mimeType, payload?.filename],
+  );
+
+  const streamSrc = payload ? payload.streamUrl ?? `/api/evidence/${evidenceId}/file` : null;
+
+  const zoomWrap = (inner: React.ReactNode) => (
+    <div id="evidence-file-preview" className="scroll-mt-4 space-y-0">
+      <ZoomToolbar
+        zoom={zoom}
+        onZoomIn={() => bumpZoom(ZOOM_STEP)}
+        onZoomOut={() => bumpZoom(-ZOOM_STEP)}
+        onReset={() => setZoom(1)}
+      />
+      <div className="max-h-[min(88vh,920px)] overflow-auto rounded-lg border-2 border-sky-300/80 bg-sky-50/30 p-2 shadow-inner">
+        <div
+          className="inline-block min-w-full origin-top-left transition-transform duration-150 ease-out"
+          style={{ transform: `scale(${zoom})` }}
+        >
+          {inner}
+        </div>
+      </div>
+    </div>
+  );
+
   if (error) {
     return (
-      <div className="rounded-lg border border-document-border bg-document px-4 py-6 text-sm text-foreground">
-        <p className="font-medium text-foreground">Preview unavailable</p>
-        <p className="mt-1 text-foreground/90">{error}</p>
-      </div>
+      <PreviewOpenFallback
+        openHref={`/api/evidence/${evidenceId}/file`}
+        detail={error}
+        title="Preview unavailable. Click to open file."
+      />
     );
   }
 
   if (!payload) {
     return (
-      <div className="rounded-lg border border-document-border bg-document px-4 py-8 text-center text-sm text-muted-foreground">
-        <InvestigationLoadingIndicator inline label="Inspecting evidence..." className="justify-center" />
+      <div
+        id="evidence-file-preview"
+        className="scroll-mt-4 rounded-lg border border-document-border bg-document px-4 py-6 text-center text-sm text-muted-foreground"
+      >
+        <InvestigationLoadingIndicator inline label="Loading file…" className="justify-center" />
       </div>
     );
   }
 
-  const mt = (payload.mimeType ?? "").toLowerCase();
-  if (mt.startsWith("image/")) {
+  if (!streamSrc) {
     return (
-      <ProtectedEvidenceView viewerLabel={payload.viewerLabel} className="rounded-lg border border-document-border bg-document p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground">File preview</p>
-        <p className="mb-2 text-[10px] leading-snug text-foreground">
-          In-app viewing only. Download/export actions are not provided. This watermark and interaction blocking are
-          deterrents only and cannot fully prevent screenshots or external capture.
-        </p>
-        {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase URL */}
-        <img
-          src={payload.url}
-          alt={payload.filename}
-          draggable={false}
-          className="mx-auto max-h-[min(70vh,640px)] w-auto max-w-full rounded border border-border bg-white shadow-sm"
-        />
-      </ProtectedEvidenceView>
+      <PreviewOpenFallback openHref={`/api/evidence/${evidenceId}/file`} detail="Could not resolve preview URL." />
     );
   }
 
-  if (mt.includes("pdf")) {
-    return (
+  if (kind === "image") {
+    return zoomWrap(
+      <ProtectedEvidenceView viewerLabel={payload.viewerLabel} className="rounded-lg border border-document-border bg-document p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground">Image</p>
+        <p className="mb-2 text-[10px] leading-snug text-foreground">
+          Same-origin stream (not a public link). Use zoom controls above; scroll to pan when zoomed.
+        </p>
+        {/* eslint-disable-next-line @next/next/no-img-element -- same-origin /api/evidence/.../file */}
+        <img
+          src={streamSrc}
+          alt={payload.filename}
+          draggable={false}
+          loading="eager"
+          decoding="async"
+          className="max-w-none rounded border border-border bg-white shadow-sm"
+          style={{ maxHeight: "none" }}
+        />
+      </ProtectedEvidenceView>,
+    );
+  }
+
+  if (kind === "pdf") {
+    return zoomWrap(
       <ProtectedEvidenceView
         viewerLabel={payload.viewerLabel}
-        className="space-y-2 rounded-lg border border-document-border bg-document p-4"
+        className="space-y-2 rounded-lg border border-document-border bg-document p-3"
       >
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">File preview</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground">PDF</p>
         <p className="text-[10px] leading-snug text-foreground">
-          In-app viewing only. Download/export actions are not provided. Capture outside the browser cannot be fully
-          blocked.
+          Embedded via a same-origin viewer. Use zoom above for a closer look; scroll inside the frame to move around.
         </p>
-        <iframe
-          title="PDF preview"
-          src={payload.url}
-          className="w-full min-h-[480px] rounded border border-border bg-white"
-          sandbox="allow-scripts allow-same-origin"
-        />
-      </ProtectedEvidenceView>
+        <EvidencePdfPageViewer evidenceId={evidenceId} streamUrl={streamSrc} filename={payload.filename} caseId={caseId} />
+      </ProtectedEvidenceView>,
+    );
+  }
+
+  if (kind === "video") {
+    return zoomWrap(
+      <ProtectedEvidenceView viewerLabel={payload.viewerLabel} className="rounded-lg border border-document-border bg-document p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground">Video</p>
+        <p className="mb-2 text-[10px] leading-snug text-foreground">
+          Same-origin stream with Range support for seeking. Zoom scales the player area.
+        </p>
+        <video
+          key={evidenceId}
+          controls
+          playsInline
+          preload="metadata"
+          src={streamSrc}
+          className="max-w-full rounded border border-border bg-black"
+        >
+          <a href={streamSrc} target="_blank" rel="noopener noreferrer" className="text-sm text-sky-200 underline">
+            Open file
+          </a>
+        </video>
+      </ProtectedEvidenceView>,
+    );
+  }
+
+  if (kind === "audio") {
+    return (
+      <div id="evidence-file-preview" className="scroll-mt-4 space-y-2">
+        <ProtectedEvidenceView viewerLabel={payload.viewerLabel} className="rounded-lg border border-document-border bg-document p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground">Audio</p>
+          <audio key={evidenceId} controls preload="metadata" className="w-full" src={streamSrc}>
+            <a href={streamSrc} target="_blank" rel="noopener noreferrer" className="text-sm underline">
+              Open file
+            </a>
+          </audio>
+        </ProtectedEvidenceView>
+      </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-document-border bg-document px-4 py-6 text-sm text-foreground">
-      <p className="font-medium text-foreground">No inline preview for this file type</p>
-      <p className="mt-1 text-foreground/90">
-        This format is not embedded here. The file remains stored for extraction and analysis.
-      </p>
-    </div>
+    <PreviewOpenFallback
+      openHref={streamSrc}
+      detail={`This format (${payload.mimeType ?? "unknown"}) is not shown inline. The file is still stored.`}
+      title="Preview unavailable. Click to open file."
+    />
   );
 }

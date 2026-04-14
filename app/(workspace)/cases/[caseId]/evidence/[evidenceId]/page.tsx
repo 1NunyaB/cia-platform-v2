@@ -3,9 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   getEvidenceById,
-  getExtractedText,
   getAiAnalysis,
-  getEvidenceNeedsExtraction,
   listEvidenceVisualTags,
   isEvidenceCaseMembershipTableError,
 } from "@/services/evidence-service";
@@ -30,7 +28,6 @@ import { CaseNoteForm } from "@/components/case-note-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { ProcessingBadge } from "@/components/processing-badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { listEvidenceLinksForEvidence } from "@/services/case-investigation-query";
 import { runEvidenceIntelligenceOnOpen } from "@/services/evidence-intelligence-service";
@@ -42,28 +39,27 @@ import { EVIDENCE_SOURCE_TYPE_LABELS, type EvidenceSourceType } from "@/lib/evid
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 import { CopyInlineButton } from "@/components/copy-inline-button";
 import { ShareEvidenceToCaseDialog } from "@/components/share-evidence-to-case";
-import { EvidenceTextSelectionSearch } from "@/components/evidence-text-selection-search";
-import { isExtractionPlaceholderText } from "@/lib/extraction-messages";
-import { EvidenceFilePreview } from "@/components/evidence-file-preview";
-import { EvidenceProcessingCallout } from "@/components/evidence-processing-callout";
+import { EvidenceInlinePreviewCard } from "@/components/evidence-inline-preview-card";
+import { EvidenceKindPanel } from "@/components/evidence-kind-panel";
 import { RecordEvidenceView } from "@/components/record-evidence-view";
 import { EvidenceWorkflowStatusCard } from "@/components/evidence-workflow-status-card";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
+import { EvidenceDeleteButton } from "@/components/evidence-delete-button";
 
 /** Shown when user arrives from Investigation Actions (?intent=) — same structured pipeline; copy stays conservative. */
 const INVESTIGATION_INTENT_MESSAGES: Record<string, string> = {
   explain_relevance:
-    "You opened this file from Investigation Actions. Use “Run AI analysis” below for the seven-field structured finding (relevance appears in Evidence Basis and Reasoning).",
+    "You opened this file from Investigation Actions. Use File view above for close inspection; structured analysis (if present) appears below.",
   redactions:
-    "Redaction-focused review: use Run AI analysis below. The structured finding and Redaction analysis panel require cautious labels — no exact recovery of hidden text; see limitations and context warning.",
+    "Redaction-focused review: inspect the file in File view above. Any stored analysis panels below use cautious labels — no exact recovery of hidden text.",
   interpret_cautious:
-    "Cautious interpretation: expect Inferred or Uncertain when appropriate. Run analysis below.",
+    "Cautious interpretation: expect Inferred or Uncertain when appropriate in any analysis shown below.",
   code_words:
-    "Pattern and phrasing review uses the same structured analysis on extracted text. Run analysis below.",
+    "Pattern and phrasing review: use File view and your notes; cross-file linking may appear below when present.",
   contradictions:
-    "Compare structured findings with your notes; an automated contradiction matrix is planned.",
+    "Compare your notes with any analysis below; an automated contradiction matrix is planned.",
   summarize:
-    "Summarization uses the same structured finding fields. Run analysis below.",
+    "Summaries may appear in structured analysis fields below when a prior analysis run exists.",
 };
 
 export default async function EvidenceDetailPage({
@@ -96,17 +92,14 @@ export default async function EvidenceDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [extracted, analysis, notes, crossLinks, stickyBundles, evidenceComments, needsManualExtraction, visualTags] =
-    await Promise.all([
-      getExtractedText(supabase, evidenceId),
-      getAiAnalysis(supabase, evidenceId),
-      listNotesForEvidence(supabase, caseId, evidenceId),
-      listEvidenceLinksForEvidence(supabase, caseId, evidenceId),
-      listStickyNotesWithReplies(supabase, evidenceId),
-      listCommentsForEvidence(supabase, caseId, evidenceId),
-      getEvidenceNeedsExtraction(supabase, evidenceId),
-      listEvidenceVisualTags(supabase, evidenceId),
-    ]);
+  const [analysis, notes, crossLinks, stickyBundles, evidenceComments, visualTags] = await Promise.all([
+    getAiAnalysis(supabase, evidenceId),
+    listNotesForEvidence(supabase, caseId, evidenceId),
+    listEvidenceLinksForEvidence(supabase, caseId, evidenceId),
+    listStickyNotesWithReplies(supabase, evidenceId),
+    listCommentsForEvidence(supabase, caseId, evidenceId),
+    listEvidenceVisualTags(supabase, evidenceId),
+  ]);
 
   let intelligence: EvidenceIntelligenceResult | null = null;
   try {
@@ -150,18 +143,28 @@ export default async function EvidenceDetailPage({
   });
   const shortAlias = ev.short_alias?.trim();
 
-  const rawExtracted = extracted?.raw_text != null ? String(extracted.raw_text) : "";
-  const extractionStatus = String((ev as { extraction_status?: string | null }).extraction_status ?? "pending").toLowerCase();
-  const hasDisplayableText =
-    extractionStatus === "ok" && rawExtracted.length > 0 && !isExtractionPlaceholderText(rawExtracted);
-  const hasAnalysis = Boolean(analysis);
   const ps = ev.processing_status as EvidenceProcessingStatus;
-  const showProcessingCallout =
-    (ps === "error" && ev.error_message) ||
-    ((ps === "accepted" || ps === "extracting") && !hasDisplayableText);
+  const derivedFromId = (ev as { derived_from_evidence_id?: string | null }).derived_from_evidence_id ?? null;
+  let provenanceFromOriginal: { href: string; label: string } | null = null;
+  if (derivedFromId) {
+    const rootEv = await getEvidenceById(supabase, derivedFromId);
+    if (rootEv) {
+      const rootCaseId = rootEv.case_id as string | null;
+      provenanceFromOriginal = {
+        href: rootCaseId ? `/cases/${rootCaseId}/evidence/${derivedFromId}` : `/evidence/${derivedFromId}`,
+        label: evidencePrimaryLabel({
+          display_filename: rootEv.display_filename ?? null,
+          original_filename: rootEv.original_filename,
+        }),
+      };
+    }
+  }
+
+  const mime = String((ev.mime_type as string | null) ?? "");
+  const showImageEvidenceBlock = mime.toLowerCase().startsWith("image/");
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-6 max-w-4xl">
       {user ? <RecordEvidenceView evidenceId={evidenceId} /> : null}
       <div>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
@@ -175,10 +178,7 @@ export default async function EvidenceDetailPage({
             Compare with another file
           </Link>
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{displayTitle}</h1>
-          <ProcessingBadge status={ev.processing_status as EvidenceProcessingStatus} />
-        </div>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{displayTitle}</h1>
         <div className="mt-2 space-y-1.5 text-sm">
           <p>
             <span className="text-muted-foreground">Original upload name: </span>
@@ -199,48 +199,62 @@ export default async function EvidenceDetailPage({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-xs leading-relaxed text-foreground">
-          Previews use short-lived in-app access only. There is no permanent public URL for this file. Screenshots and
-          copying can still occur on a user&apos;s device — this UI does not claim to block that.
-        </p>
-        <EvidenceFilePreview evidenceId={evidenceId} />
-      </div>
-
-      {showProcessingCallout ? (
-        <EvidenceProcessingCallout status={ps} errorMessage={ev.error_message as string | null | undefined} />
-      ) : null}
-
-      <EvidenceWorkflowStatusCard
-        processingStatus={ps}
-        extractionStatus={(ev as { extraction_status?: string | null }).extraction_status}
-        hasDisplayableExtract={hasDisplayableText}
-        hasAnalysis={hasAnalysis}
-        needsExtraction={needsManualExtraction}
+      <EvidenceInlinePreviewCard
         evidenceId={evidenceId}
+        caseId={caseId}
+        showCropToolbar={Boolean(user)}
+        mimeType={ev.mime_type as string | null}
       />
 
-      {user ? (
-        <Card className="border-border bg-card shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-foreground">Also use in another investigation</CardTitle>
-            <CardDescription>
-              Link the same file to another case you can edit. Ranked by overlap with titles, entities, aliases,
-              timeline years, clusters, and source metadata. No public link or export is created.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ShareEvidenceToCaseDialog evidenceId={evidenceId} excludeCaseId={caseId} />
-          </CardContent>
-        </Card>
-      ) : null}
+      <EvidenceKindPanel evidenceId={evidenceId} row={ev} canEdit={Boolean(user)} />
+
+      <Card className="border-border bg-card shadow-sm">
+        <CardHeader className="space-y-0 px-3 py-2 pb-1">
+          <CardTitle className="text-sm font-semibold">Evidence status</CardTitle>
+          <CardDescription className="text-[11px] leading-snug text-muted-foreground">
+            Sharing, stacks, and quick actions — file preview is above.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 px-3 py-2 pb-3">
+          <EvidenceWorkflowStatusCard
+            processingStatus={ps}
+            evidenceId={evidenceId}
+            uploadHref={`/cases/${caseId}/evidence/add`}
+            evidenceDisplayLabel={displayTitle}
+            caseIdForWorkspaceAi={caseId}
+            processingErrorMessage={(ev.error_message as string | null | undefined) ?? null}
+            assignControl={
+              user ? <ShareEvidenceToCaseDialog evidenceId={evidenceId} excludeCaseId={caseId} /> : undefined
+            }
+            deleteControl={
+              user && isPlatformDeleteAdmin(user) ? (
+                <EvidenceDeleteButton evidenceId={evidenceId} redirectTo={`/cases/${caseId}`} />
+              ) : undefined
+            }
+          />
+        </CardContent>
+      </Card>
 
       <Card className="border-border bg-card shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Source metadata</CardTitle>
-          <CardDescription>Captured at upload for the case index and source filters.</CardDescription>
+          <CardTitle className="text-base">Details &amp; collaboration</CardTitle>
+          <CardDescription>Source metadata, optional prior analysis, links, notes, and discussion.</CardDescription>
         </CardHeader>
-        <CardContent className="text-sm space-y-2 text-foreground">
+        <CardContent className="text-sm space-y-4 text-foreground">
+          <p className="text-xs leading-relaxed text-foreground">
+            Previews use short-lived in-app access only. There is no permanent public URL for this file. Screenshots and
+            copying can still occur on a user&apos;s device — this UI does not claim to block that.
+          </p>
+          {provenanceFromOriginal ? (
+            <p className="rounded-md border border-border bg-panel px-2.5 py-2 text-xs text-foreground">
+              <span className="font-semibold text-foreground">Provenance: </span>
+              Cropped or edited derivative linked to original{" "}
+              <Link href={provenanceFromOriginal.href} className="font-medium text-blue-900 underline underline-offset-2">
+                {provenanceFromOriginal.label}
+              </Link>
+              .
+            </p>
+          ) : null}
           <p>
             <span className="text-muted-foreground">Type: </span>
             {EVIDENCE_SOURCE_TYPE_LABELS[(ev.source_type as EvidenceSourceType) ?? "unknown"] ?? String(ev.source_type ?? "unknown")}
@@ -276,128 +290,60 @@ export default async function EvidenceDetailPage({
               </p>
             </div>
           ) : null}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-card shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Image evidence and visual tags</CardTitle>
-          <CardDescription>
-            Photo-first images may have limited OCR; visual object/feature tags support image evidence search.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-foreground">
-          <p>
-            <span className="text-muted-foreground">Classification: </span>
-            {extractionStatus === "limited" || extractionStatus === "low_confidence"
-              ? "Image evidence / photo-first"
-              : "Text-first or mixed"}
-          </p>
-          {!visualTags.length ? (
-            <p className="text-muted-foreground">No visual tags detected yet.</p>
-          ) : (
-            <ul className="flex flex-wrap gap-2">
-              {visualTags.map((t) => (
-                <li key={`${t.tag}-${t.source ?? "heuristic"}`} className="rounded border border-border bg-panel px-2 py-1">
-                  <span className="font-medium text-foreground">{t.tag}</span>
-                  {t.confidence != null ? (
-                    <span className="ml-1 text-xs text-muted-foreground">{Math.round(t.confidence * 100)}%</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {intelligence ? <EvidenceIntelligencePanel caseId={caseId} intelligence={intelligence} /> : null}
-
-      {intent && INVESTIGATION_INTENT_MESSAGES[intent] ? (
-        <Alert className="border-sky-300 bg-sky-50">
-          <AlertDescription className="text-sm text-foreground">{INVESTIGATION_INTENT_MESSAGES[intent]}</AlertDescription>
-        </Alert>
-      ) : intent ? (
-        <Alert className="border-border bg-panel">
-          <AlertDescription className="text-sm text-foreground">
-            Investigation action intent &quot;{intent}&quot; — use Run AI analysis below for the structured finding format.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <Card className="border-border bg-white shadow-sm">
-        <CardHeader>
-          <CardTitle>Extracted text</CardTitle>
-          <CardDescription>
-            AI only sees this text — not your original binary file. Images and scanned PDFs are OCR&apos;d
-            server-side after upload; text-based PDFs use the embedded text layer. Status should move Accepted →
-            Extracting → Complete unless an error is stored.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {hasDisplayableText ? (
-            <EvidenceTextSelectionSearch caseId={caseId}>
-              <pre className="text-xs whitespace-pre-wrap max-h-96 overflow-auto rounded-md border border-document-border bg-document p-4 text-foreground select-text cursor-text">
-                {rawExtracted}
-              </pre>
-            </EvidenceTextSelectionSearch>
-          ) : rawExtracted.length > 0 ? (
-            <>
-              {extractionStatus === "limited" || extractionStatus === "low_confidence" ? (
-                <p className="text-sm text-foreground rounded-md border border-sky-300 bg-sky-50 px-3 py-2">
-                  This appears to be primarily image/photo evidence. OCR found limited incidental text; manual visual
-                  review and zoom may be more useful than document-style extraction.
-                </p>
-              ) : (
-                <p className="text-sm text-foreground rounded-md border border-sky-300 bg-sky-50 px-3 py-2">
-                  Stored content is only a system placeholder (no readable text was extracted). Run extraction again or
-                  upload a clearer file.
-                </p>
-              )}
-              <pre className="text-xs whitespace-pre-wrap max-h-48 overflow-auto rounded-md border border-document-border bg-document p-4 text-foreground/90">
-                {rawExtracted}
-              </pre>
-            </>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-foreground">
-                No extracted text yet. If the file is still processing, wait for Extracting to finish. Use{" "}
-                <strong className="font-semibold">Extract now</strong> in Evidence processing above when you are ready.
+          {showImageEvidenceBlock ? (
+            <div className="rounded-md border-2 border-sky-800/50 bg-sky-50 px-2.5 py-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-sky-950">Image</p>
+              <p className="mt-1 text-[11px] font-medium leading-snug text-sky-950">
+                Use <strong className="font-semibold">File view</strong> above to zoom in and crop or save an edited copy
+                (new file <span className="font-mono">__0001</span>, <span className="font-mono">__0002</span>, … linked to
+                the root original).
               </p>
+              {visualTags.length ? (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {visualTags.map((t) => (
+                    <li
+                      key={`${t.tag}-${t.source ?? "heuristic"}`}
+                      className="rounded border border-sky-800/30 bg-white px-2 py-1"
+                    >
+                      <span className="font-medium text-foreground">{t.tag}</span>
+                      {t.confidence != null ? (
+                        <span className="ml-1 text-xs text-muted-foreground">{Math.round(t.confidence * 100)}%</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-xs font-semibold text-sky-950">No visual tags on file.</p>
+              )}
             </div>
+          ) : (
+            <p>
+              <span className="text-muted-foreground">Media type: </span>
+              <span className="text-foreground">{mime || "unknown"}</span>
+            </p>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-white shadow-sm">
-        <CardHeader>
-          <CardTitle>AI analysis</CardTitle>
-          <CardDescription>
-            Structured finding: Finding / Answer, Evidence Basis, Confidence, Classification (including Correlated),
-            Reasoning, Limitations, Next Step. Runs only on extracted text above; supplemental graph data is
-            secondary.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
           {!analysis ? (
             <p className="text-sm text-foreground border border-border rounded-md p-4 bg-panel">
-              No analysis has been run yet. Use <strong className="font-semibold">Run AI analysis</strong> in Evidence
-              processing after extraction completes.
+              No structured analysis record on this file. Prior runs (if any) are not shown here.
             </p>
           ) : (
             <EvidenceAnalysisSection analysis={analysis} />
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-white shadow-sm">
-        <CardHeader>
-          <CardTitle>Cross-evidence links</CardTitle>
-          <CardDescription>Pairwise links and cluster co-membership for this file (case scope).</CardDescription>
-        </CardHeader>
-        <CardContent>
+          {intelligence ? <EvidenceIntelligencePanel caseId={caseId} intelligence={intelligence} /> : null}
+          {intent && INVESTIGATION_INTENT_MESSAGES[intent] ? (
+            <Alert className="border-sky-300 bg-sky-50">
+              <AlertDescription className="text-sm text-foreground">{INVESTIGATION_INTENT_MESSAGES[intent]}</AlertDescription>
+            </Alert>
+          ) : intent ? (
+            <Alert className="border-border bg-panel">
+              <AlertDescription className="text-sm text-foreground">
+                Investigation action intent &quot;{intent}&quot; — use File view above and any analysis sections below.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           {!crossLinks.length ? (
             <p className="text-sm text-muted-foreground">
-              No explicit links yet. Run analysis with cross-file hints, or add links in a future workflow.
+              No explicit cross-file links yet. Links may be added in a future workflow.
             </p>
           ) : (
             <ul className="space-y-2 text-sm">
@@ -417,18 +363,7 @@ export default async function EvidenceDetailPage({
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-white shadow-sm">
-        <CardHeader>
-          <CardTitle>Evidence discussion</CardTitle>
-          <CardDescription>
-            Collaboration follows this file: related clusters, sticky notes, and threaded comments load here
-            automatically.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-8">
+          <Separator className="bg-border" />
           <div>
             <h3 className="text-sm font-medium text-foreground mb-2">Related clusters</h3>
             {!relatedClusters.length ? (
@@ -485,15 +420,7 @@ export default async function EvidenceDetailPage({
               getProfile={getProfile}
             />
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border bg-white shadow-sm">
-        <CardHeader>
-          <CardTitle>Formal notes on this file</CardTitle>
-          <CardDescription>Case-record notes attached to this evidence item (distinct from sticky notes).</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+          <Separator className="bg-border" />
           <CaseNoteForm caseId={caseId} evidenceFileId={evidenceId} placeholder="Formal note about this file…" />
           <Separator />
           {notes.length === 0 ? (
@@ -559,7 +486,7 @@ function EvidenceAnalysisSection({ analysis }: { analysis: AiAnalysis }) {
       {presentation.isLegacyShell ? (
         <p className="text-sm text-amber-950 border border-amber-300 rounded-md p-3 bg-amber-50">
           This record uses a legacy or partially migrated stored shape. The seven fields below are normalized for
-          display — re-run analysis to refresh structured data end-to-end.
+          display only.
         </p>
       ) : null}
       <AnalysisFindingPanel

@@ -7,7 +7,6 @@ import { requestClientIp, requestUserAgent } from "@/lib/request-audit";
 import { resolveRequestActor } from "@/lib/resolve-request-actor";
 import { logUsageEvent } from "@/services/usage-log-service";
 import { touchGuestSession } from "@/services/guest-session-service";
-import { deferExtractionFromJsonBody } from "@/lib/evidence-defer-extraction";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 import { NextResponse } from "next/server";
 
@@ -21,26 +20,9 @@ type UrlImportItemResponse = {
   existing?: unknown;
   needs_extraction?: boolean;
   message?: string;
-  deferred_extraction?: boolean;
   error?: string;
-  import_status:
-    | "imported"
-    | "duplicate_skipped"
-    | "extraction_queued"
-    | "extraction_complete"
-    | "extraction_partial"
-    | "extraction_failed";
+  import_status: "imported" | "duplicate_skipped" | "failed";
 };
-
-function classifyImportStatus(payload: { warning?: string; deferred_extraction?: boolean }) {
-  if (payload.deferred_extraction) return "extraction_queued" as const;
-  if (!payload.warning) return "extraction_complete" as const;
-  if (payload.warning.includes("Text extraction was not possible")) return "extraction_failed" as const;
-  if (payload.warning.toLowerCase().includes("placeholder") || payload.warning.toLowerCase().includes("missing")) {
-    return "extraction_partial" as const;
-  }
-  return "imported" as const;
-}
 
 export async function POST(request: Request) {
   const actor = await resolveRequestActor();
@@ -83,7 +65,6 @@ export async function POST(request: Request) {
 
   const uploaderIp = requestClientIp(request);
   const userAgent = requestUserAgent(request);
-  const deferExtraction = deferExtractionFromJsonBody(body);
 
   const results: UrlImportItemResponse[] = [];
   for (const currentUrl of urls) {
@@ -95,7 +76,6 @@ export async function POST(request: Request) {
           url: currentUrl,
           source: { ...source, source_url: source.source_url?.trim() || currentUrl },
           forceDuplicate,
-          deferExtraction,
           audit: { uploaderIp, userAgent, uploadMethod: "url_import" },
         });
         await logUsageEvent({
@@ -107,8 +87,7 @@ export async function POST(request: Request) {
           url: currentUrl,
           id: r.id,
           warning: r.warning,
-          ...(r.deferred_extraction ? { deferred_extraction: true } : {}),
-          import_status: classifyImportStatus({ warning: r.warning, deferred_extraction: r.deferred_extraction }),
+          import_status: "imported",
         });
       } else {
         const r = await ingestGuestEvidenceFromUrl(actor.service, {
@@ -116,7 +95,6 @@ export async function POST(request: Request) {
           url: currentUrl,
           source: { ...source, source_url: source.source_url?.trim() || currentUrl },
           forceDuplicate,
-          deferExtraction,
           audit: { uploaderIp, userAgent, uploadMethod: "url_import" },
         });
         await touchGuestSession(actor.service, actor.guestSessionId);
@@ -129,8 +107,7 @@ export async function POST(request: Request) {
           url: currentUrl,
           id: r.id,
           warning: r.warning,
-          ...(r.deferred_extraction ? { deferred_extraction: true } : {}),
-          import_status: classifyImportStatus({ warning: r.warning, deferred_extraction: r.deferred_extraction }),
+          import_status: "imported",
         });
       }
     } catch (e) {
@@ -138,15 +115,14 @@ export async function POST(request: Request) {
         const dupClient = actor.mode === "user" ? actor.supabase : actor.service;
         const dupBody = await buildDuplicateEvidenceResponse(dupClient, e);
         results.push({
-          url: currentUrl,
-          duplicate: true,
-          import_status: "duplicate_skipped",
           ...dupBody,
+          url: currentUrl,
+          import_status: "duplicate_skipped",
         });
         continue;
       }
       const message = e instanceof Error ? e.message : "Import failed";
-      results.push({ url: currentUrl, error: message, import_status: "extraction_failed" });
+      results.push({ url: currentUrl, error: message, import_status: "failed" });
     }
   }
 
@@ -161,7 +137,6 @@ export async function POST(request: Request) {
     const legacy = {
       id: single.id,
       ...(single.warning ? { warning: single.warning } : {}),
-      ...(single.deferred_extraction ? { deferred_extraction: true } : {}),
     };
     return NextResponse.json(legacy, { status: 201 });
   }

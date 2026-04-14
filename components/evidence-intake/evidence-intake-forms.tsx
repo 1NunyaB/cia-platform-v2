@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AlertTriangle, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,12 +12,6 @@ import { EvidenceSourceFields } from "@/components/evidence-source-fields";
 import { parseEvidenceSourceFromFormData } from "@/lib/evidence-source";
 import type { DuplicateEvidenceMatch } from "@/lib/evidence-upload-errors";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
-import { cn } from "@/lib/utils";
-import { emitExtractionReminder } from "@/lib/extraction-reminder-event";
-import {
-  isExtractionSoftFailureNotice,
-  UPLOAD_DEFERRED_EXTRACTION_CLIENT_MESSAGE,
-} from "@/lib/extraction-user-messages";
 import { InvestigationLoadingIndicator } from "@/components/investigation-loading-indicator";
 
 function existingEvidenceHref(e: DuplicateEvidenceMatch) {
@@ -93,13 +88,28 @@ function CaseUploadDestinationField({
   );
 }
 
-type RowStatus = "pending" | "uploading" | "done" | "error" | "duplicate_info";
+type BulkUploadPhase = "pending" | "uploading" | "done" | "error" | "duplicate_info";
 
-type FileRow = {
+type BulkBatchRow = {
+  key: string;
   name: string;
-  status: RowStatus;
-  detail?: string;
+  uploadPhase: BulkUploadPhase;
+  uploadDetail?: string;
+  evidenceId?: string;
+  selected: boolean;
 };
+
+function evidenceDetailHref(
+  mode: "case" | "library",
+  caseId: string | undefined,
+  attachToCurrentCase: boolean,
+  evidenceId: string,
+) {
+  if (mode === "case" && caseId && attachToCurrentCase) {
+    return `/cases/${caseId}/evidence/${evidenceId}`;
+  }
+  return `/evidence/${evidenceId}`;
+}
 
 const securityNoticeClass =
   "rounded-lg border border-alert-border bg-alert px-4 py-3 text-sm text-alert-foreground leading-relaxed";
@@ -109,9 +119,6 @@ const duplicateInfoAlertClass =
   "border-emerald-200 bg-emerald-50 text-emerald-950 [&_a]:text-blue-900 [&_a]:underline [&_button]:text-foreground";
 
 const successAlertClass = "border-emerald-200 bg-emerald-50 text-emerald-950";
-
-const deferredInfoAlertClass =
-  "border-sky-300 bg-sky-50 text-foreground [&_a]:text-blue-900 [&_a]:underline";
 
 function EvidenceBroadcastUploadHint() {
   return (
@@ -131,17 +138,13 @@ type IntakeProps = {
 export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
   const router = useRouter();
   const [attachToCurrentCase, setAttachToCurrentCase] = useState(true);
-  const [runExtractionAfterUpload, setRunExtractionAfterUpload] = useState(true);
   const { apiEvidence } = useIntakeApi(mode, caseId, attachToCurrentCase);
   const [singleError, setSingleError] = useState<string | null>(null);
   const [singleLoading, setSingleLoading] = useState(false);
   const [dupInfo, setDupInfo] = useState<{
     existing: DuplicateEvidenceMatch;
-    needs_extraction?: boolean;
     message?: string;
   } | null>(null);
-  const [dupExtractLoading, setDupExtractLoading] = useState(false);
-  const [singleExtractionBanner, setSingleExtractionBanner] = useState<string | null>(null);
 
   async function onSingleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -155,11 +158,7 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
       return;
     }
     setSingleLoading(true);
-    setSingleExtractionBanner(null);
     const fd = new FormData(form);
-    if (!runExtractionAfterUpload) {
-      fd.set("defer_extraction", "true");
-    }
     const res = await fetch(apiEvidence, {
       method: "POST",
       body: fd,
@@ -169,11 +168,9 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
       warning?: string;
       duplicate?: boolean;
       existing?: DuplicateEvidenceMatch;
-      needs_extraction?: boolean;
       message?: string;
       no_new_record?: boolean;
       id?: string;
-      deferred_extraction?: boolean;
     };
     setSingleLoading(false);
     const existing = data.existing;
@@ -181,7 +178,6 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
     if (isDup && existing) {
       setDupInfo({
         existing,
-        needs_extraction: data.needs_extraction,
         message: data.message,
       });
       return;
@@ -189,25 +185,6 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
     if (!res.ok) {
       setSingleError(data.error ?? "Upload failed");
       return;
-    }
-    if (data.deferred_extraction) {
-      setSingleExtractionBanner(UPLOAD_DEFERRED_EXTRACTION_CLIENT_MESSAGE);
-    } else if (data.warning) {
-      setSingleExtractionBanner(data.warning);
-    } else {
-      setSingleExtractionBanner(null);
-    }
-    if (data.id && isExtractionSoftFailureNotice(data.warning)) {
-      const href =
-        mode === "case" && caseId && attachToCurrentCase
-          ? `/cases/${caseId}/evidence/${data.id}`
-          : `/evidence/${data.id}`;
-      emitExtractionReminder({
-        evidenceId: data.id,
-        filename: file.name,
-        href,
-        caseId: mode === "case" && attachToCurrentCase && caseId ? caseId : undefined,
-      });
     }
     form.reset();
     router.refresh();
@@ -250,25 +227,6 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
                 <Button asChild variant="secondary" className="border-border bg-card text-foreground">
                   <Link href={existingEvidenceHref(dupInfo.existing)}>Open existing</Link>
                 </Button>
-                {dupInfo.needs_extraction ? (
-                  <Button
-                    type="button"
-                    variant="default"
-                    disabled={dupExtractLoading}
-                    className="bg-sky-700 text-white hover:bg-sky-600 disabled:bg-sky-700 disabled:text-white"
-                    onClick={async () => {
-                      setDupExtractLoading(true);
-                      try {
-                        await fetch(`/api/evidence/${dupInfo.existing.id}/extract`, { method: "POST" });
-                        router.push(existingEvidenceHref(dupInfo.existing));
-                      } finally {
-                        setDupExtractLoading(false);
-                      }
-                    }}
-                  >
-                    {dupExtractLoading ? <InvestigationLoadingIndicator inline label="Starting..." /> : "Re-run extraction"}
-                  </Button>
-                ) : null}
               </div>
               <p className="text-xs text-muted-foreground pt-1 border-t border-emerald-200/80 mt-2">
                 Duplicate upload override is disabled for collaborative integrity.
@@ -281,26 +239,6 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
             <AlertDescription>{singleError}</AlertDescription>
           </Alert>
         ) : null}
-        {singleExtractionBanner ? (
-          <Alert
-            className={
-              singleExtractionBanner === UPLOAD_DEFERRED_EXTRACTION_CLIENT_MESSAGE
-                ? deferredInfoAlertClass
-                : successAlertClass
-            }
-          >
-            <AlertDescription
-              className={
-                singleExtractionBanner === UPLOAD_DEFERRED_EXTRACTION_CLIENT_MESSAGE
-                  ? "text-sm text-foreground"
-                  : "text-sm text-emerald-950"
-              }
-            >
-              {singleExtractionBanner}
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
         <div className="space-y-2">
           <Label htmlFor="evidence-intake-single-file" className="text-foreground">
             File
@@ -315,21 +253,10 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
 
         <EvidenceSourceFields idPrefix="intake-single" variant="intake" />
 
-        <label className="flex items-start gap-2 cursor-pointer text-sm text-foreground">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={runExtractionAfterUpload}
-            onChange={(ev) => setRunExtractionAfterUpload(ev.target.checked)}
-          />
-          <span>
-            <span className="font-medium text-foreground">Run text extraction immediately after upload</span>
-            <span className="block text-xs text-muted-foreground mt-0.5">
-              Uncheck to store the file first and run extraction later from the evidence page (useful when loading
-              evidence before going live).
-            </span>
-          </span>
-        </label>
+        <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs leading-relaxed text-foreground">
+          Files are stored for in-app viewing (preview, zoom, crop). After upload, open the evidence page to review,
+          crop, or run AI analysis.
+        </p>
 
         <Button
           type="submit"
@@ -339,10 +266,8 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
         >
           {singleLoading ? (
             <InvestigationLoadingIndicator inline label="Scanning upload..." />
-          ) : runExtractionAfterUpload ? (
-            "Upload & extract"
           ) : (
-            "Upload (extract later)"
+            "Upload"
           )}
         </Button>
       </form>
@@ -353,11 +278,16 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
 export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
   const router = useRouter();
   const [attachToCurrentCase, setAttachToCurrentCase] = useState(true);
-  const [runExtractionAfterUpload, setRunExtractionAfterUpload] = useState(true);
   const { apiEvidence } = useIntakeApi(mode, caseId, attachToCurrentCase);
-  const [bulkRows, setBulkRows] = useState<FileRow[]>([]);
+  const [bulkRows, setBulkRows] = useState<BulkBatchRow[]>([]);
+  const bulkRowsRef = useRef<BulkBatchRow[]>([]);
+  bulkRowsRef.current = bulkRows;
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
+
+  function clearBatchList() {
+    setBulkRows([]);
+  }
 
   async function onBulkSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -370,14 +300,23 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
       return;
     }
     const arr = Array.from(files);
-    setBulkRows(arr.map((f) => ({ name: f.name, status: "pending" as const })));
+    const batchId = `b-${Date.now()}`;
+    setBulkRows(
+      arr.map((f, i) => ({
+        key: `${batchId}-${i}`,
+        name: f.name,
+        uploadPhase: "pending",
+        selected: false,
+      })),
+    );
     setBulkLoading(true);
 
     const sourcePayload = parseEvidenceSourceFromFormData(new FormData(form));
 
     for (let i = 0; i < arr.length; i++) {
+      const rowKey = `${batchId}-${i}`;
       setBulkRows((prev) =>
-        prev.map((r, j) => (j === i ? { ...r, status: "uploading" as const, detail: "Validating & scanning…" } : r)),
+        prev.map((r) => (r.key === rowKey ? { ...r, uploadPhase: "uploading", uploadDetail: "Validating & scanning…" } : r)),
       );
       const fd = new FormData();
       fd.set("file", arr[i]!);
@@ -385,9 +324,6 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
       fd.set("source_platform", sourcePayload.source_platform ?? "");
       fd.set("source_program", sourcePayload.source_program ?? "");
       fd.set("source_url", sourcePayload.source_url ?? "");
-      if (!runExtractionAfterUpload) {
-        fd.set("defer_extraction", "true");
-      }
       const res = await fetch(apiEvidence, {
         method: "POST",
         body: fd,
@@ -399,8 +335,6 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
         duplicate?: boolean;
         existing?: DuplicateEvidenceMatch;
         message?: string;
-        needs_extraction?: boolean;
-        deferred_extraction?: boolean;
       };
       const existing = data.existing;
       const isDup = Boolean(data.duplicate && existing && (res.ok || res.status === 409));
@@ -410,14 +344,16 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
           original_filename: existing.original_filename,
         });
         setBulkRows((prev) =>
-          prev.map((r, j) =>
-            j === i
+          prev.map((r) =>
+            r.key === rowKey
               ? {
                   ...r,
-                  status: "duplicate_info" as const,
-                  detail:
+                  uploadPhase: "duplicate_info",
+                  uploadDetail:
                     data.message ??
-                    `Already stored as “${label}” — no new upload. Open that item to review or re-run extraction.`,
+                    `Already stored as “${label}” — no new row. Open that item to review.`,
+                  evidenceId: undefined,
+                  selected: false,
                 }
               : r,
           ),
@@ -426,38 +362,54 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
       }
       if (!res.ok) {
         setBulkRows((prev) =>
-          prev.map((r, j) =>
-            j === i ? { ...r, status: "error" as const, detail: data.error ?? "Blocked or rejected" } : r,
+          prev.map((r) =>
+            r.key === rowKey
+              ? {
+                  ...r,
+                  uploadPhase: "error",
+                  uploadDetail: data.error ?? "Blocked or rejected",
+                  selected: false,
+                }
+              : r,
           ),
         );
         continue;
       }
-      const detail = data.deferred_extraction
-        ? "Accepted — extraction deferred (open file to extract)"
-        : data.warning
-          ? `Accepted — ${data.warning}`
-          : "Accepted · extracted";
-      if (data.id && isExtractionSoftFailureNotice(data.warning)) {
-        const href =
-          mode === "case" && caseId && attachToCurrentCase
-            ? `/cases/${caseId}/evidence/${data.id}`
-            : `/evidence/${data.id}`;
-        emitExtractionReminder({
-          evidenceId: data.id,
-          filename: arr[i]!.name,
-          href,
-          caseId: mode === "case" && attachToCurrentCase && caseId ? caseId : undefined,
-        });
+
+      if (!data.id) {
+        setBulkRows((prev) =>
+          prev.map((r) =>
+            r.key === rowKey
+              ? {
+                  ...r,
+                  uploadPhase: "done",
+                  uploadDetail: "Upload accepted but no evidence id was returned — refresh and check your library.",
+                  selected: true,
+                }
+              : r,
+          ),
+        );
+        continue;
       }
+
       setBulkRows((prev) =>
-        prev.map((r, j) => (j === i ? { ...r, status: "done" as const, detail } : r)),
+        prev.map((r) =>
+          r.key === rowKey
+            ? {
+                ...r,
+                evidenceId: data.id,
+                uploadPhase: "done",
+                uploadDetail: data.warning ? String(data.warning) : undefined,
+                selected: false,
+              }
+            : r,
+        ),
       );
     }
 
     setBulkLoading(false);
     form.reset();
     router.refresh();
-    window.setTimeout(() => setBulkRows([]), 4000);
   }
 
   return (
@@ -470,7 +422,7 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
 
       <EvidenceBroadcastUploadHint />
 
-      <form onSubmit={onBulkSubmit} className="space-y-6">
+      <form onSubmit={onBulkSubmit} className="space-y-4">
         {mode === "case" ? (
           <CaseUploadDestinationField
             idPrefix="intake-bulk"
@@ -495,64 +447,15 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
             multiple
             className="cursor-pointer border-input bg-form-field text-form-field-foreground file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:text-black"
           />
-          <p className="text-xs text-zinc-600">Each file is stored separately with the same source metadata below.</p>
+          <p className="text-xs text-muted-foreground">Each file is stored separately with the same source metadata below.</p>
         </div>
 
         <EvidenceSourceFields idPrefix="intake-bulk" variant="intake" />
 
-        <label className="flex items-start gap-2 cursor-pointer text-sm text-foreground">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={runExtractionAfterUpload}
-            onChange={(ev) => setRunExtractionAfterUpload(ev.target.checked)}
-          />
-          <span>
-            <span className="font-medium text-foreground">Run text extraction immediately after each upload</span>
-            <span className="block text-xs text-muted-foreground mt-0.5">
-              Uncheck to load files first and extract later from each evidence page.
-            </span>
-          </span>
-        </label>
-
-        {bulkRows.length > 0 ? (
-          <div
-            className={cn(
-              "rounded-lg border border-border bg-panel p-3 max-h-48 overflow-y-auto",
-              "text-sm text-foreground",
-            )}
-          >
-            <p className="text-xs font-medium text-muted-foreground mb-2">Upload progress</p>
-            <ul className="space-y-1.5 text-xs">
-              {bulkRows.map((r, i) => (
-                <li key={`${r.name}-${i}`} className="flex justify-between gap-2">
-                  <span className="truncate text-foreground">{r.name}</span>
-                  <span
-                    className={
-                      r.status === "done" || r.status === "duplicate_info"
-                        ? "text-emerald-900 shrink-0 font-medium"
-                        : r.status === "error"
-                          ? "text-alert-foreground shrink-0 font-medium"
-                          : r.status === "uploading"
-                            ? "text-amber-900 shrink-0"
-                            : "text-muted-foreground shrink-0"
-                    }
-                  >
-                    {r.status === "pending"
-                      ? "Queued"
-                      : r.status === "uploading"
-                        ? "Uploading…"
-                        : r.status === "done"
-                          ? r.detail ?? "Done"
-                          : r.status === "duplicate_info"
-                            ? r.detail ?? "Already in library"
-                            : r.detail ?? "Failed"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
+        <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs leading-relaxed text-foreground">
+          Each file uploads in sequence. When a row shows “Uploaded successfully,” open it to preview, zoom, crop, or
+          run AI analysis from the evidence page.
+        </p>
 
         <Button
           type="submit"
@@ -562,13 +465,98 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
         >
           {bulkLoading ? (
             <InvestigationLoadingIndicator inline label="Processing batch..." />
-          ) : runExtractionAfterUpload ? (
-            "Upload all & extract"
           ) : (
-            "Upload all (extract later)"
+            "Upload all"
           )}
         </Button>
       </form>
+
+      {bulkRows.length > 0 ? (
+        <div className="rounded-lg border-2 border-border bg-panel p-3 space-y-3">
+          <p className="rounded-md border border-sky-300/80 bg-sky-50 px-2.5 py-1.5 text-[11px] leading-snug text-sky-950">
+            <strong className="font-semibold">Batch status:</strong> each successful row links to the stored file — open
+            it for embedded preview, zoom, and crop.
+          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground">Uploaded files</p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={clearBatchList}>
+                Clear list
+              </Button>
+            </div>
+          </div>
+
+          <div className="max-h-[min(55vh,420px)] overflow-x-auto overflow-y-auto">
+            <table className="w-full min-w-[480px] border-collapse text-xs text-foreground">
+              <thead>
+                <tr className="border-b border-border text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th className="py-1.5 pr-2" scope="col">
+                    File
+                  </th>
+                  <th className="py-1.5 pr-2 w-[180px]" scope="col">
+                    Upload
+                  </th>
+                  <th className="py-1.5 w-[120px]" scope="col">
+                    Open
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {bulkRows.map((r) => {
+                  return (
+                    <tr key={r.key} className="border-b border-border/80 align-top">
+                      <td className="py-2 pr-2 font-medium break-all">{r.name}</td>
+                      <td className="py-2 pr-2">
+                        {r.uploadPhase === "pending" ? (
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <Circle className="h-3.5 w-3.5" aria-hidden />
+                            Queued
+                          </span>
+                        ) : r.uploadPhase === "uploading" ? (
+                          <span className="inline-flex items-center gap-1 text-amber-900 font-medium">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            Uploading…
+                          </span>
+                        ) : r.uploadPhase === "done" ? (
+                          <span className="inline-flex items-start gap-1 text-emerald-950 font-semibold">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
+                            <span>
+                              Uploaded successfully
+                              {r.uploadDetail ? (
+                                <span className="mt-0.5 block font-normal text-[10px] text-foreground/90">{r.uploadDetail}</span>
+                              ) : null}
+                            </span>
+                          </span>
+                        ) : r.uploadPhase === "duplicate_info" ? (
+                          <span className="inline-flex items-start gap-1 text-emerald-900">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" aria-hidden />
+                            <span className="font-medium">{r.uploadDetail ?? "Duplicate — not uploaded again"}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-destructive font-semibold">
+                            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                            Failed
+                            {r.uploadDetail ? <span className="block font-normal text-[10px]">{r.uploadDetail}</span> : null}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2">
+                        {r.evidenceId ? (
+                          <Button asChild variant="secondary" size="sm" className="h-7 px-2 text-[11px] border-border">
+                            <Link href={evidenceDetailHref(mode, caseId, attachToCurrentCase, r.evidenceId)}>Open</Link>
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -576,7 +564,6 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
 export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
   const router = useRouter();
   const [attachToCurrentCase, setAttachToCurrentCase] = useState(true);
-  const [runExtractionAfterUpload, setRunExtractionAfterUpload] = useState(true);
   const { apiFromUrl } = useIntakeApi(mode, caseId, attachToCurrentCase);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [urlInfo, setUrlInfo] = useState<string | null>(null);
@@ -591,18 +578,11 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
   const [rowResults, setRowResults] = useState<
     {
       url: string;
-      status:
-        | "imported"
-        | "duplicate_skipped"
-        | "extraction_queued"
-        | "extraction_complete"
-        | "extraction_partial"
-        | "extraction_failed";
+      status: "imported" | "duplicate_skipped" | "failed";
       id?: string;
       warning?: string;
       error?: string;
       existing?: DuplicateEvidenceMatch;
-      needs_extraction?: boolean;
       message?: string;
     }[]
   >([]);
@@ -630,7 +610,6 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
         source_platform: source.source_platform,
         source_program: source.source_program,
         source_url: source.source_url?.trim() || undefined,
-        defer_extraction: !runExtractionAfterUpload,
       }),
     });
     const data = (await res.json().catch(() => ({}))) as {
@@ -641,17 +620,9 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
         warning?: string;
         duplicate?: boolean;
         existing?: DuplicateEvidenceMatch;
-        needs_extraction?: boolean;
         message?: string;
-        deferred_extraction?: boolean;
         error?: string;
-        import_status:
-          | "imported"
-          | "duplicate_skipped"
-          | "extraction_queued"
-          | "extraction_complete"
-          | "extraction_partial"
-          | "extraction_failed";
+        import_status: "imported" | "duplicate_skipped" | "failed";
       }[];
     };
     setUrlLoading(false);
@@ -667,28 +638,12 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
         id: r.id,
         warning: r.warning,
         error: r.error,
-        existing: r.existing,
-        needs_extraction: r.needs_extraction,
+        existing: r.existing as DuplicateEvidenceMatch | undefined,
         message: r.message,
       })),
     );
-    for (const result of results) {
-      if (result.id && isExtractionSoftFailureNotice(result.warning)) {
-        const href =
-          mode === "case" && caseId && attachToCurrentCase
-            ? `/cases/${caseId}/evidence/${result.id}`
-            : `/evidence/${result.id}`;
-        const label = result.url.length > 72 ? `${result.url.slice(0, 72)}…` : result.url;
-        emitExtractionReminder({
-          evidenceId: result.id,
-          filename: `URL import (${label})`,
-          href,
-          caseId: mode === "case" && attachToCurrentCase && caseId ? caseId : undefined,
-        });
-      }
-    }
-    const importedCount = results.filter((r) => Boolean(r.id)).length;
-    const failedCount = results.filter((r) => r.import_status === "extraction_failed" && !r.id).length;
+    const importedCount = results.filter((r) => r.import_status === "imported").length;
+    const failedCount = results.filter((r) => r.import_status === "failed").length;
     const duplicateCount = results.filter((r) => r.import_status === "duplicate_skipped").length;
     setUrlInfo(
       `Processed ${results.length} link${results.length === 1 ? "" : "s"}: ${importedCount} imported, ${duplicateCount} duplicate skipped, ${failedCount} failed.`,
@@ -741,12 +696,8 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
           />
         ) : null}
         {urlInfo ? (
-          <Alert className={urlInfo.includes("extraction was skipped") ? deferredInfoAlertClass : successAlertClass}>
-            <AlertDescription
-              className={urlInfo.includes("extraction was skipped") ? "text-foreground" : "text-emerald-950"}
-            >
-              {urlInfo}
-            </AlertDescription>
+          <Alert className={successAlertClass}>
+            <AlertDescription className="text-emerald-950">{urlInfo}</AlertDescription>
           </Alert>
         ) : null}
         {urlError ? (
@@ -859,20 +810,10 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
 
         <EvidenceSourceFields idPrefix="intake-url" variant="intake" />
 
-        <label className="flex items-start gap-2 cursor-pointer text-sm text-foreground">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={runExtractionAfterUpload}
-            onChange={(ev) => setRunExtractionAfterUpload(ev.target.checked)}
-          />
-          <span>
-            <span className="font-medium text-foreground">Run text extraction immediately after import</span>
-            <span className="block text-xs text-muted-foreground mt-0.5">
-              Uncheck to store the imported text file first and extract later from the evidence page.
-            </span>
-          </span>
-        </label>
+        <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs leading-relaxed text-foreground">
+          Each URL is fetched and stored as evidence text for in-app viewing. Open the evidence page to preview, zoom,
+          crop, or run AI analysis.
+        </p>
 
         <Button
           type="submit"
@@ -880,13 +821,7 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto"
           title={undefined}
         >
-          {urlLoading ? (
-            <InvestigationLoadingIndicator inline label="Importing links..." />
-          ) : runExtractionAfterUpload ? (
-            "Import links & extract"
-          ) : (
-            "Import links (extract later)"
-          )}
+          {urlLoading ? <InvestigationLoadingIndicator inline label="Importing links..." /> : "Import links"}
         </Button>
 
         {rowResults.length ? (
@@ -899,13 +834,17 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
                   <p className="text-xs text-muted-foreground">
                     {row.status === "imported" && "Imported"}
                     {row.status === "duplicate_skipped" && "Duplicate skipped"}
-                    {row.status === "extraction_queued" && "Extraction queued"}
-                    {row.status === "extraction_complete" && "Extraction complete"}
-                    {row.status === "extraction_partial" && "Extraction partial"}
-                    {row.status === "extraction_failed" && "Extraction failed"}
+                    {row.status === "failed" && "Import failed"}
                   </p>
                   {row.warning ? <p className="mt-1 text-xs text-muted-foreground">{row.warning}</p> : null}
                   {row.error ? <p className="mt-1 text-xs text-destructive">{row.error}</p> : null}
+                  {row.status === "imported" && row.id ? (
+                    <div className="mt-2">
+                      <Button asChild variant="secondary" size="sm" className="h-7 border-border bg-card text-foreground">
+                        <Link href={evidenceDetailHref(mode, caseId, attachToCurrentCase, row.id)}>Open evidence</Link>
+                      </Button>
+                    </div>
+                  ) : null}
                   {row.existing ? (
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Button asChild variant="secondary" className="border-border bg-card text-foreground">

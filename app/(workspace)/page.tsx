@@ -79,7 +79,7 @@ export default async function HomeDashboardPage() {
                   <p>Open the evidence library to upload files, or sign in to see cases.</p>
                   <div className="flex flex-wrap justify-center gap-2">
                     <Button asChild size="sm">
-                      <Link href="/evidence">Evidence library</Link>
+                      <Link href="/evidence">Evidence Library</Link>
                     </Button>
                     <Button asChild variant="outline" size="sm">
                       <Link href="/login">Sign in</Link>

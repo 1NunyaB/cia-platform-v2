@@ -44,22 +44,22 @@ export const EVIDENCE_MARKER_STYLES: Record<
 > = {
   unassigned: {
     dot: "bg-zinc-600 shadow-[0_0_0_1px_rgba(0,0,0,0.14)]",
-    label: "Not assigned to a case",
+    label: "Add to case",
   },
   in_case: {
     dot: "bg-sky-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
-    label: "Included in a case",
+    label: "On case evidence",
   },
   multi_case: {
     dot: "bg-violet-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
-    label: "Linked to more than one case",
+    label: "Add to evidence stack(s)",
   },
   analyzed: {
     dot: "bg-emerald-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
-    label: "AI analysis available",
+    label: "AI insights available — open to review",
   },
   problem: {
     dot: "bg-red-600 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]",
-    label: "Blocked, failed, or needs attention",
+    label: "Blocked — fix upload or review status",
   },
 };

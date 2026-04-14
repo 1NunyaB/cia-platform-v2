@@ -104,7 +104,7 @@ export function EvidenceCompareWorkspace({ evidenceIdA, evidenceIdB }: { evidenc
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           <Link href="/evidence" className="text-foreground hover:underline">
-            ← Evidence library
+            ← Evidence Library
           </Link>
         </p>
         <div className="flex flex-wrap gap-2">

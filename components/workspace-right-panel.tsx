@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WorkspaceEvidenceAiPanel } from "@/components/workspace-evidence-ai-panel";
 import { WorkspaceNotesPanel } from "@/components/workspace-notes-panel";
 import { cn } from "@/lib/utils";
 
@@ -30,13 +31,20 @@ type WorkspaceShellWithPanelProps = {
   notesOwnerKey: string;
   canDelete: boolean;
   children: React.ReactNode;
+  /** Signed-in workspace chat — rendered below Notes when set. */
+  chatSlot?: React.ReactNode;
 };
 
 /**
  * Main workspace column + draggable resize handle + notes panel (right).
  * Controls panel width (React state + localStorage) and collapse (thin bar).
  */
-export function WorkspaceShellWithPanel({ notesOwnerKey, canDelete, children }: WorkspaceShellWithPanelProps) {
+export function WorkspaceShellWithPanel({
+  notesOwnerKey,
+  canDelete,
+  children,
+  chatSlot = null,
+}: WorkspaceShellWithPanelProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [panelWidthPx, setPanelWidthPx] = React.useState(DEFAULT_PANEL_WIDTH);
   const [dragging, setDragging] = React.useState(false);
@@ -143,7 +151,7 @@ export function WorkspaceShellWithPanel({ notesOwnerKey, canDelete, children }: 
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize notes panel"
+          aria-label="Resize workspace side panel"
           className={cn(
             "relative z-10 w-1.5 shrink-0 touch-none",
             "cursor-col-resize border-l border-border/60 bg-border/30",
@@ -160,7 +168,7 @@ export function WorkspaceShellWithPanel({ notesOwnerKey, canDelete, children }: 
           !dragging && "transition-[width] duration-200 ease-out",
         )}
         style={{ width: asideWidth }}
-        aria-label="Workspace side panel"
+        aria-label="Workspace AI, notes, and chat panel"
         data-state={collapsed ? "collapsed" : "expanded"}
       >
         <div
@@ -171,7 +179,7 @@ export function WorkspaceShellWithPanel({ notesOwnerKey, canDelete, children }: 
         >
           {!collapsed && (
             <span className="min-w-0 flex-1 truncate pl-1 text-xs font-medium text-foreground">
-              Notes
+              AI · notes{chatSlot ? " · chat" : ""}
             </span>
           )}
           <Button
@@ -191,8 +199,26 @@ export function WorkspaceShellWithPanel({ notesOwnerKey, canDelete, children }: 
         </div>
 
         {!collapsed && (
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto p-3">
-            <WorkspaceNotesPanel ownerKey={notesOwnerKey} canDelete={canDelete} />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+            <div className="flex min-h-[28vh] flex-1 flex-col overflow-hidden">
+              <WorkspaceEvidenceAiPanel />
+            </div>
+            <div className="mt-3 flex max-h-[min(9vh,68px)] min-h-0 shrink-0 flex-col overflow-hidden border-t border-border pt-3">
+              <p className="mb-1 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Notes
+              </p>
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-0.5">
+                <WorkspaceNotesPanel ownerKey={notesOwnerKey} canDelete={canDelete} density="compact" />
+              </div>
+            </div>
+            {chatSlot ? (
+              <div className="mt-3 flex min-h-0 min-h-[10rem] flex-1 flex-col overflow-hidden border-t border-border pt-3">
+                <p className="mb-1 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Workplace chat
+                </p>
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-0.5">{chatSlot}</div>
+              </div>
+            ) : null}
           </div>
         )}
       </aside>

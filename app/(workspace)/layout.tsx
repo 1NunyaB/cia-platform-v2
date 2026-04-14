@@ -1,11 +1,15 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { GuestModeBanner } from "@/components/guest-mode-banner";
 import { WorkspaceShellWithPanel } from "@/components/workspace-right-panel";
+import { DashboardChat } from "@/components/dashboard-chat";
 import { getGuestSessionIdFromCookies } from "@/lib/guest-session";
 import { createClient } from "@/lib/supabase/server";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
+import { listRecentDashboardChat } from "@/services/collaboration-service";
+import { fetchProfilesByIds } from "@/lib/profiles";
 
 export default async function WorkspaceLayout({
   children,
@@ -41,6 +45,27 @@ export default async function WorkspaceLayout({
         avatarUrl: (inv.investigator_avatar_url as string | null)?.trim() || null,
       };
     }
+  }
+
+  let workspaceChatSlot: ReactNode = null;
+  if (user) {
+    let chatMessages: Awaited<ReturnType<typeof listRecentDashboardChat>> = [];
+    try {
+      chatMessages = await listRecentDashboardChat(supabase, 120);
+    } catch {
+      chatMessages = [];
+    }
+    const chatAuthorIds = [...new Set(chatMessages.map((m) => m.author_id).filter(Boolean))] as string[];
+    const chatProfiles = await fetchProfilesByIds(supabase, chatAuthorIds);
+    workspaceChatSlot = (
+      <DashboardChat
+        variant="sidebar"
+        initialMessages={chatMessages}
+        profiles={chatProfiles}
+        currentUserId={user.id}
+        isPlatformAdmin={isPlatformDeleteAdmin(user)}
+      />
+    );
   }
 
   return (
@@ -85,16 +110,10 @@ export default async function WorkspaceLayout({
               Evidence
             </Link>
             <Link
-              href="/media/video"
+              href="/analyze"
               className="text-muted-foreground hover:text-foreground"
             >
-              Video
-            </Link>
-            <Link
-              href="/media/audio"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Audio
+              Analyze
             </Link>
             {user ? (
               <Link
@@ -104,12 +123,6 @@ export default async function WorkspaceLayout({
                 Investigators
               </Link>
             ) : null}
-            <Link
-              href="/explore"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Public
-            </Link>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -123,7 +136,11 @@ export default async function WorkspaceLayout({
         </div>
       </header>
 
-      <WorkspaceShellWithPanel notesOwnerKey={notesOwnerKey} canDelete={isPlatformDeleteAdmin(user)}>
+      <WorkspaceShellWithPanel
+        notesOwnerKey={notesOwnerKey}
+        canDelete={isPlatformDeleteAdmin(user)}
+        chatSlot={workspaceChatSlot}
+      >
         {children}
       </WorkspaceShellWithPanel>
     </div>

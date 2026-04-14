@@ -78,7 +78,7 @@ export default function HomePage() {
           <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {[
               "Evidence review and triage",
-              "Document extraction and analysis",
+              "Document viewing and analysis",
               "Timeline construction and correlation",
               "Entity/claim clustering",
               "Contradiction and corroboration review",

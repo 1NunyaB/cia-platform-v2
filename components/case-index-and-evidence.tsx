@@ -15,6 +15,13 @@ import { CopyInlineButton } from "@/components/copy-inline-button";
 import { resolveEvidenceStatusBullets } from "@/lib/evidence-status-bullets";
 import { EvidenceStatusBullets } from "@/components/evidence-status-bullets";
 import { EvidenceMarkerLegend } from "@/components/evidence-marker-legend";
+import { EvidenceListThumbnail } from "@/components/evidence-list-thumbnail";
+import {
+  WORKSPACE_AI_DRAG_MIME,
+  dispatchWorkspaceAiAttachEvidence,
+} from "@/lib/workspace-evidence-ai-bridge";
+import { EvidenceBulkActionBar } from "@/components/evidence-bulk-action-bar";
+import { EvidenceKindBadge } from "@/components/evidence-kind-badge";
 
 export type EvidenceRow = {
   id: string;
@@ -35,6 +42,8 @@ export type EvidenceRow = {
   source_platform?: string | null;
   source_program?: string | null;
   source_url?: string | null;
+  suggested_evidence_kind?: string | null;
+  confirmed_evidence_kind?: string | null;
 };
 
 type IndexFilter =
@@ -54,14 +63,18 @@ export function CaseIndexWorkspace({
   snapshot,
   evidence,
   evidenceUploadSlot,
+  allowBulkActions = false,
 }: {
   caseId: string;
   snapshot: CaseIndexSnapshot;
   evidence: EvidenceRow[];
   /** Upload / import UI (e.g. `CaseEvidenceAddPanel`) rendered above the filtered list. */
   evidenceUploadSlot: React.ReactNode;
+  /** Signed-in users get bulk select + actions on the case evidence list. */
+  allowBulkActions?: boolean;
 }) {
   const [filter, setFilter] = useState<IndexFilter>({ key: "all" });
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   const filtered = useMemo(() => {
     if (filter.key === "all") return evidence;
@@ -70,6 +83,30 @@ export function CaseIndexWorkspace({
   }, [evidence, filter]);
 
   const counts = evidence.length;
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((e) => selected.has(e.id));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllFiltered() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const e of filtered) next.delete(e.id);
+      } else {
+        for (const e of filtered) next.add(e.id);
+      }
+      return next;
+    });
+  }
 
   function Section({
     title,
@@ -397,6 +434,20 @@ export function CaseIndexWorkspace({
             <p className="text-sm text-muted-foreground">No evidence matches this index selection.</p>
           ) : (
             <ul className="space-y-2">
+              {allowBulkActions ? (
+                <li className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-2.5 py-2 text-xs text-foreground">
+                  <label className="flex cursor-pointer items-center gap-2 font-medium">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      aria-label="Select all visible rows"
+                    />
+                    Select all in this list
+                  </label>
+                </li>
+              ) : null}
               {filtered.map((e) => {
                 const primary = evidencePrimaryLabel({
                   display_filename: e.display_filename ?? null,
@@ -410,21 +461,42 @@ export function CaseIndexWorkspace({
                   hasAiAnalysis: e.has_ai_analysis ?? false,
                   viewed: e.viewed ?? false,
                   hasContentDuplicatePeer: e.has_content_duplicate_peer ?? false,
-                  extractionStatus: e.extraction_status,
                 });
                 return (
                 <li
                   key={e.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-panel p-3"
+                  draggable
+                  onDragStart={(ev) => {
+                    ev.dataTransfer.setData(WORKSPACE_AI_DRAG_MIME, e.id);
+                    ev.dataTransfer.effectAllowed = "copy";
+                  }}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-panel p-2.5"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-2">
+                      {allowBulkActions ? (
+                        <input
+                          type="checkbox"
+                          className="mt-2 h-4 w-4 shrink-0 rounded border-input"
+                          checked={selected.has(e.id)}
+                          onChange={() => toggleSelect(e.id)}
+                          aria-label={`Select ${primary}`}
+                        />
+                      ) : null}
+                      <EvidenceListThumbnail
+                        evidenceId={e.id}
+                        mimeType={e.mime_type}
+                        filenameHint={e.original_filename}
+                      />
                       <span className="mt-1.5">
                         <EvidenceStatusBullets kinds={bullets} />
                       </span>
-                      <Link href={`/cases/${caseId}/evidence/${e.id}`} className="font-medium hover:underline truncate block min-w-0">
+                      <Link href={`/cases/${caseId}/evidence/${e.id}`} className="font-medium hover:underline truncate block min-w-0 pt-0.5">
                         {primary}
                       </Link>
+                    </div>
+                    <div className="mt-1">
+                      <EvidenceKindBadge row={e} compact />
                     </div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                       {sal ? (
@@ -448,12 +520,37 @@ export function CaseIndexWorkspace({
                       ) : null}
                     </p>
                   </div>
-                  <ProcessingBadge status={e.processing_status} />
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 border-sky-400 bg-sky-50 px-2 text-[10px] font-semibold text-sky-950 hover:bg-sky-100"
+                      onClick={() =>
+                        dispatchWorkspaceAiAttachEvidence({
+                          evidenceId: e.id,
+                          caseId,
+                          label: primary,
+                        })
+                      }
+                    >
+                      Send to AI
+                    </Button>
+                    <ProcessingBadge status={e.processing_status} />
+                  </div>
                 </li>
               );
               })}
             </ul>
           )}
+          {allowBulkActions && selected.size > 0 ? (
+            <EvidenceBulkActionBar
+              variant="case"
+              caseId={caseId}
+              selectedIds={[...selected]}
+              onClearSelection={() => setSelected(new Set())}
+            />
+          ) : null}
           </div>
         </CardContent>
       </Card>

@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { AnalyzeButton } from "@/components/analyze-button";
 import { ProcessingBadge } from "@/components/processing-badge";
 import { Badge } from "@/components/ui/badge";
+import { EvidenceKindBadge } from "@/components/evidence-kind-badge";
 import { type AiAnalysis, type EvidenceFile, type EvidenceProcessingStatus } from "@/types";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 
@@ -14,12 +14,10 @@ function truncate(s: string, n: number) {
 export function CaseEvidenceRow({
   caseId,
   file,
-  hasExtractedText,
   latestAnalysis,
 }: {
   caseId: string;
   file: EvidenceFile;
-  hasExtractedText: boolean;
   latestAnalysis?: AiAnalysis;
 }) {
   const primary = evidencePrimaryLabel({
@@ -39,6 +37,7 @@ export function CaseEvidenceRow({
             {primary}
           </Link>
           <ProcessingBadge status={file.processing_status as EvidenceProcessingStatus} />
+          <EvidenceKindBadge row={file} compact />
           {latestAnalysis ? (
             <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
               AI analyzed
@@ -59,12 +58,9 @@ export function CaseEvidenceRow({
             <span className="text-foreground/80 font-medium">Summary: </span>
             {truncate(latestAnalysis.summary, 220)}
           </p>
-        ) : hasExtractedText && !latestAnalysis ? (
-          <p className="mt-2 text-xs text-muted-foreground">Extracted text ready — run analysis from this row or the file view.</p>
         ) : null}
       </div>
       <div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
-        <AnalyzeButton evidenceId={file.id} />
         <Link
           href={`/cases/${caseId}/evidence/${file.id}`}
           className="text-center text-xs text-primary hover:underline sm:text-right"

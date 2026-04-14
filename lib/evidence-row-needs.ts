@@ -26,15 +26,22 @@ export function evidenceRowNeedsExtraction(input: {
   return ex !== "ok";
 }
 
-/** True when text extraction looks complete but AI analysis has not been run yet. */
+/** True when the file is stored and viewable but no AI analysis row exists (optional triage marker). */
 export function evidenceRowNeedsAnalyzing(input: {
   processingStatus: EvidenceProcessingStatus;
-  extractionStatus: string | null | undefined;
   hasAiAnalysis: boolean;
 }): boolean {
   if (input.hasAiAnalysis) return false;
   const ps = input.processingStatus;
-  if (ps === "blocked" || ps === "error") return false;
-  const ex = String(input.extractionStatus ?? "").toLowerCase();
-  return ps === "complete" && ex === "ok";
+  if (
+    ps === "blocked" ||
+    ps === "error" ||
+    ps === "pending" ||
+    ps === "scanning" ||
+    ps === "extracting" ||
+    ps === "analyzing"
+  ) {
+    return false;
+  }
+  return true;
 }

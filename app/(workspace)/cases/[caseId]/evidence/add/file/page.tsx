@@ -8,7 +8,7 @@ export default async function CaseAddEvidenceFilePage({ params }: { params: Prom
       backHref={`/cases/${caseId}/evidence/add`}
       backLabel="Add evidence options"
       title="Upload file"
-      subtitle="One document from your computer. PDF and text extract most reliably."
+      subtitle="One document from your computer. PDFs and images open inline with zoom; other types use the in-app viewer where supported."
     >
       <EvidenceIntakeSingleForm mode="case" caseId={caseId} />
     </EvidenceIntakeShell>

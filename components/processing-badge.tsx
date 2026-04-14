@@ -6,7 +6,7 @@ const labels: Record<EvidenceProcessingStatus, string> = {
   scanning: "Scanning",
   accepted: "Accepted",
   blocked: "Blocked",
-  extracting: "Extracting",
+  extracting: "Processing",
   analyzing: "Analyzing",
   complete: "Complete",
   error: "Error",

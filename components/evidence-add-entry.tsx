@@ -27,7 +27,7 @@ export function EvidenceAddEntry({
           <h3 className="text-sm font-semibold text-foreground">Add evidence</h3>
           <p className="mt-1 text-xs text-zinc-600 leading-relaxed">
             {mode === "library"
-              ? "Open the intake flow to upload or import into your library. Assign files to a case later."
+              ? "Open the intake flow to upload or import into your library. Add files to a case later."
               : "Upload files or import from a URL on dedicated screens — less clutter, same validation and storage."}
           </p>
         </div>

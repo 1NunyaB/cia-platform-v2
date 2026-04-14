@@ -76,7 +76,6 @@ export function DashboardEvidencePreview({ rows }: { rows: DashboardEvidencePrev
                 hasAiAnalysis: r.has_ai_analysis,
                 viewed: r.viewed,
                 hasContentDuplicatePeer: r.has_content_duplicate_peer,
-                extractionStatus: r.extraction_status,
               });
               const sourceLabel =
                 (r.source_program && String(r.source_program).trim()) ||
@@ -103,7 +102,7 @@ export function DashboardEvidencePreview({ rows }: { rows: DashboardEvidencePrev
                         {sourceLabel || "Source not labeled"}
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        {r.case_id || r.case_membership_count > 0 ? "Current case evidence" : "Evidence library"} ·{" "}
+                        {r.case_id || r.case_membership_count > 0 ? "Current case evidence" : "Evidence Library"} ·{" "}
                         {new Date(r.created_at).toLocaleString()}
                       </span>
                     </Link>

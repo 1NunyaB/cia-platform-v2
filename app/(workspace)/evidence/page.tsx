@@ -1,7 +1,5 @@
 import {
-  findEvidenceIdsMatchingExtractedText,
   findEvidenceIdsMatchingVisualTags,
-  findGuestEvidenceIdsMatchingExtractedText,
   findGuestEvidenceIdsMatchingVisualTags,
   getEvidenceCaseMembershipCounts,
   getEvidenceContentDuplicatePeerFlags,
@@ -10,8 +8,10 @@ import {
   listEvidenceVisible,
   listGuestEvidence,
 } from "@/services/evidence-service";
+import { effectiveEvidenceKind, parseEvidenceKind } from "@/lib/evidence-kind";
 import { CaseEvidenceAddPanel } from "@/components/case-evidence-add-panel";
 import { EvidenceLibraryClient } from "@/components/evidence-library-client";
+import { listCasesForUser } from "@/services/case-service";
 import { createClient } from "@/lib/supabase/server";
 import { getGuestSessionIdFromCookies } from "@/lib/guest-session";
 import { tryCreateServiceClient } from "@/lib/supabase/service";
@@ -19,9 +19,9 @@ import { tryCreateServiceClient } from "@/lib/supabase/service";
 export default async function EvidenceLibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; kind?: string }>;
 }) {
-  const { q: qRaw } = await searchParams;
+  const { q: qRaw, kind: kindRaw } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,6 +33,7 @@ export default async function EvidenceLibraryPage({
   }
 
   const needle = (qRaw ?? "").trim();
+  const kindFilter = parseEvidenceKind(kindRaw);
 
   let rows: Awaited<ReturnType<typeof listEvidenceVisible>>;
   if (user) {
@@ -52,23 +53,17 @@ export default async function EvidenceLibraryPage({
 
   if (needle.length >= 2) {
     const nl = needle.toLowerCase();
-    let fromExtract: Set<string>;
     let fromVisualTags: Set<string>;
     if (user) {
-      fromExtract = await findEvidenceIdsMatchingExtractedText(supabase, needle);
       fromVisualTags = await findEvidenceIdsMatchingVisualTags(supabase, needle);
     } else {
       const service = tryCreateServiceClient();
-      fromExtract = service
-        ? await findGuestEvidenceIdsMatchingExtractedText(service, guestId!, needle)
-        : new Set();
       fromVisualTags = service
         ? await findGuestEvidenceIdsMatchingVisualTags(service, guestId!, needle)
         : new Set();
     }
     rows = rows.filter((r) => {
       const id = r.id as string;
-      if (fromExtract.has(id)) return true;
       if (fromVisualTags.has(id)) return true;
       return (
         String(r.original_filename).toLowerCase().includes(nl) ||
@@ -76,6 +71,10 @@ export default async function EvidenceLibraryPage({
         String(r.short_alias ?? "").toLowerCase().includes(nl)
       );
     });
+  }
+
+  if (kindFilter) {
+    rows = rows.filter((r) => effectiveEvidenceKind(r) === kindFilter);
   }
 
   const ids = rows.map((r) => r.id as string);
@@ -110,10 +109,21 @@ export default async function EvidenceLibraryPage({
     has_content_duplicate_peer: dupFlags.get(r.id as string) ?? false,
   }));
 
+  const casesForAssign = user ? await listCasesForUser(supabase, user.id) : [];
+
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8">
       <CaseEvidenceAddPanel mode="library" />
-      <EvidenceLibraryClient rows={enriched} initialQuery={needle} />
+      <EvidenceLibraryClient
+        rows={enriched}
+        initialQuery={needle}
+        activeKind={kindFilter}
+        signedIn={Boolean(user)}
+        casesForAssign={casesForAssign.map((c) => ({
+          id: c.id as string,
+          title: (c.title as string) ?? "Untitled",
+        }))}
+      />
     </div>
   );
 }

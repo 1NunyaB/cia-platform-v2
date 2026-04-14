@@ -1,4 +1,5 @@
 import { getExtractedText } from "@/services/evidence-service";
+import { extractTextForEvidence } from "@/services/text-extraction-service";
 import { runAiAnalysisForEvidence } from "@/services/ai-analysis-service";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -28,12 +29,12 @@ export async function POST(
     actor.mode === "user"
       ? await client
           .from("evidence_files")
-          .select("id, case_id, processing_status")
+          .select("id, case_id, processing_status, mime_type")
           .eq("id", evidenceId)
           .maybeSingle()
       : await client
           .from("evidence_files")
-          .select("id, case_id, processing_status")
+          .select("id, case_id, processing_status, mime_type")
           .eq("id", evidenceId)
           .eq("guest_session_id", actor.guestSessionId)
           .maybeSingle();
@@ -45,23 +46,32 @@ export async function POST(
   if (ps === "blocked") {
     return NextResponse.json({ error: "This evidence item was blocked and cannot be analyzed." }, { status: 400 });
   }
-  if (ps !== "complete") {
+  if (ps !== "complete" && ps !== "accepted") {
     return NextResponse.json(
       {
-        error: "Evidence is not ready for analysis yet. Wait for extraction to finish (status must be complete).",
+        error: "Evidence is not ready for analysis yet. Wait until the file has finished uploading and scanning.",
       },
       { status: 400 },
     );
   }
 
-  const extracted = await getExtractedText(client, evidenceId);
-  const text = extracted?.raw_text ?? "";
+  let extracted = await getExtractedText(client, evidenceId);
+  let text = extracted?.raw_text ?? "";
+
+  if (!text.trim()) {
+    const mime = (ev as { mime_type?: string | null }).mime_type ?? null;
+    const built = await extractTextForEvidence(client, evidenceId, mime);
+    if (built.ok) {
+      extracted = await getExtractedText(client, evidenceId);
+      text = extracted?.raw_text ?? "";
+    }
+  }
 
   if (!text.trim()) {
     return NextResponse.json(
       {
         error:
-          "No extracted text available. Upload a text-based PDF, plain text, or a scannable image/PDF so OCR can run.",
+          "Could not read enough text from this file for AI analysis. Try a text-based PDF, plain text export, or a clearer scan.",
       },
       { status: 400 },
     );

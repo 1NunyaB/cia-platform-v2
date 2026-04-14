@@ -5,11 +5,19 @@ import Link from "next/link";
 import type { EvidenceFile, EvidenceProcessingStatus } from "@/types";
 import { resolveEvidenceStatusBullets } from "@/lib/evidence-status-bullets";
 import { EvidenceStatusBullets } from "@/components/evidence-status-bullets";
+import { EvidenceListThumbnail } from "@/components/evidence-list-thumbnail";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
+import {
+  WORKSPACE_AI_DRAG_MIME,
+  dispatchWorkspaceAiAttachEvidence,
+} from "@/lib/workspace-evidence-ai-bridge";
+import { type EvidenceKind } from "@/lib/evidence-kind";
+import { EvidenceKindBadge } from "@/components/evidence-kind-badge";
+import { EvidenceBulkActionBar } from "@/components/evidence-bulk-action-bar";
 
 export type EvidenceLibraryRow = EvidenceFile & {
   case_membership_count: number;
@@ -19,21 +27,36 @@ export type EvidenceLibraryRow = EvidenceFile & {
 };
 
 type Tab = "all" | "unassigned" | "assigned";
-type SubFilter = "none" | "needs_extract" | "needs_analyze";
+
+function libraryHref(query: string, kind: EvidenceKind | null) {
+  const p = new URLSearchParams();
+  const q = query.trim();
+  if (q) p.set("q", q);
+  if (kind) p.set("kind", kind);
+  const s = p.toString();
+  return s ? `/evidence?${s}` : "/evidence";
+}
 
 export function EvidenceLibraryClient({
   rows,
   initialQuery = "",
+  activeKind = null,
+  casesForAssign = [],
+  signedIn = false,
 }: {
   rows: EvidenceLibraryRow[];
-  /** Active search (from `?q=`) — filenames, aliases, extracted text. */
+  /** Active search (from `?q=`) — filenames, aliases, visual tags. */
   initialQuery?: string;
+  /** From `?kind=` — browse by confirmed-or-suggested type. */
+  activeKind?: EvidenceKind | null;
   casesForAssign?: { id: string; title: string }[];
+  /** Bulk actions require an authenticated user. */
+  signedIn?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("all");
-  const [subFilter, setSubFilter] = useState<SubFilter>("none");
   const [compareA, setCompareA] = useState<string | null>(null);
   const [compareB, setCompareB] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   function stageCompare(id: string) {
     if (compareA === id) {
@@ -57,17 +80,6 @@ export function EvidenceLibraryClient({
   }
 
   const filtered = useMemo(() => {
-    function kindsForRow(r: EvidenceLibraryRow) {
-      return resolveEvidenceStatusBullets({
-        caseId: r.case_id,
-        caseMembershipCount: r.case_membership_count,
-        processingStatus: r.processing_status as EvidenceProcessingStatus,
-        hasAiAnalysis: r.has_ai_analysis,
-        viewed: r.viewed,
-        hasContentDuplicatePeer: r.has_content_duplicate_peer,
-        extractionStatus: r.extraction_status as string | null | undefined,
-      });
-    }
     let list =
       tab === "all"
         ? rows
@@ -75,26 +87,46 @@ export function EvidenceLibraryClient({
           ? rows.filter((r) => r.case_id == null && r.case_membership_count === 0)
           : rows.filter((r) => r.case_id != null || r.case_membership_count > 0);
 
-    if (subFilter === "needs_extract") {
-      list = list.filter((r) => kindsForRow(r).includes("needs_extraction"));
-    } else if (subFilter === "needs_analyze") {
-      list = list.filter((r) => kindsForRow(r).includes("needs_analysis"));
-    }
     return list;
-  }, [rows, tab, subFilter]);
+  }, [rows, tab]);
 
   const compareReady = compareA && compareB && compareA !== compareB;
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((r) => selected.has(r.id as string));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllFiltered() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const r of filtered) next.delete(r.id as string);
+      } else {
+        for (const r of filtered) next.add(r.id as string);
+      }
+      return next;
+    });
+  }
 
   return (
     <div className="w-full space-y-6">
       <div className="min-w-0">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Evidence library</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Evidence Library</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-foreground">
             Your <strong className="font-semibold text-foreground">evidence database</strong> holds every file you can
-            access. Assign items to an investigation for <strong className="font-semibold text-foreground">current case
-            evidence</strong> on that case&apos;s workspace. Colored markers summarize assignment, extraction, and
-            review state — filters help you organize and review without running AI.
+            access. Use <strong className="font-semibold text-foreground">Add to case</strong> to put files on an
+            investigation for <strong className="font-semibold text-foreground">current case evidence</strong> on that
+            case&apos;s workspace. Colored markers summarize assignment and review state —
+            filters help you organize the list.
           </p>
         </div>
       </div>
@@ -104,10 +136,11 @@ export function EvidenceLibraryClient({
         action="/evidence"
         className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-panel p-3"
       >
+        {activeKind ? <input type="hidden" name="kind" value={activeKind} /> : null}
         <Input
           name="q"
           defaultValue={initialQuery}
-          placeholder="Search library — names, aliases, extracted text…"
+          placeholder="Search library — names and aliases…"
           className="min-w-[200px] flex-1"
         />
         <Button type="submit" size="sm" variant="secondary">
@@ -115,16 +148,48 @@ export function EvidenceLibraryClient({
         </Button>
         {initialQuery ? (
           <Button type="button" size="sm" variant="ghost" asChild>
-            <Link href="/evidence">Clear</Link>
+            <Link href={libraryHref("", activeKind)}>Clear</Link>
           </Button>
         ) : null}
       </form>
+
+      <div className="flex flex-wrap gap-2 rounded-md border border-border bg-panel p-2">
+        <span className="w-full text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:w-auto sm:self-center">
+          Browse by type
+        </span>
+        <p className="w-full text-[10px] leading-snug text-muted-foreground">
+          Uses each file&apos;s stored type (from the evidence library).{" "}
+          <span className="font-medium text-foreground/90">Suggested type</span> is set at upload;{" "}
+          <span className="font-medium text-foreground/90">Confirmed</span> after you review. This is separate from
+          investigation stacks (e.g. People, Location).
+        </p>
+        {(
+          [
+            [null, "All types"],
+            ["document", "Document"],
+            ["image", "Image"],
+            ["video", "Video"],
+            ["audio", "Audio"],
+          ] as const
+        ).map(([k, label]) => (
+          <Button
+            key={label}
+            type="button"
+            size="sm"
+            variant={activeKind === k ? "default" : "outline"}
+            className="h-8 text-xs"
+            asChild
+          >
+            <Link href={libraryHref(initialQuery, k)}>{label}</Link>
+          </Button>
+        ))}
+      </div>
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
           {(
             [
-              ["all", "Evidence library"],
+              ["all", "Evidence Library"],
               ["unassigned", "Unassigned evidence"],
               ["assigned", "On a case"],
             ] as const
@@ -135,27 +200,6 @@ export function EvidenceLibraryClient({
               size="sm"
               variant={tab === key ? "default" : "outline"}
               onClick={() => setTab(key)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Focus</span>
-          {(
-            [
-              ["none", "All statuses"],
-              ["needs_extract", "Needs extracting"],
-              ["needs_analyze", "Needs analyzing"],
-            ] as const
-          ).map(([key, label]) => (
-            <Button
-              key={key}
-              type="button"
-              size="sm"
-              variant={subFilter === key ? "secondary" : "ghost"}
-              className={subFilter === key ? "border border-border" : ""}
-              onClick={() => setSubFilter(key)}
             >
               {label}
             </Button>
@@ -189,13 +233,14 @@ export function EvidenceLibraryClient({
 
       <Card className="border-border shadow-sm">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-base text-foreground">Library ({filtered.length})</CardTitle>
+          <CardTitle className="text-base text-foreground">Evidence Library ({filtered.length})</CardTitle>
           <CardDescription className="leading-relaxed">
-            Open a file to preview, extract text, run analysis, or assign to a case. Use markers and filters to triage
-            work.
+            Open a file for embedded viewing, zoom, crop, assign to a case, or compare. Use markers and filters to triage
+            the list.
+            {signedIn ? " Select rows to add to a case, add to evidence stack(s), or mark viewed." : null}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           {filtered.length === 0 ? (
             rows.length === 0 ? (
               <EmptyState title="No evidence in your library yet">
@@ -210,6 +255,20 @@ export function EvidenceLibraryClient({
             )
           ) : (
             <ul className="space-y-2">
+              {signedIn ? (
+                <li className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-foreground">
+                  <label className="flex cursor-pointer items-center gap-2 font-medium">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      aria-label="Select all visible rows"
+                    />
+                    Select all in this list
+                  </label>
+                </li>
+              ) : null}
               {filtered.map((r) => {
                 const primary = evidencePrimaryLabel({
                   display_filename: r.display_filename ?? null,
@@ -222,16 +281,36 @@ export function EvidenceLibraryClient({
                   hasAiAnalysis: r.has_ai_analysis,
                   viewed: r.viewed,
                   hasContentDuplicatePeer: r.has_content_duplicate_peer,
-                  extractionStatus: r.extraction_status as string | null | undefined,
                 });
                 const href = r.case_id ? `/cases/${r.case_id}/evidence/${r.id}` : `/evidence/${r.id}`;
                 const staged = r.id === compareA || r.id === compareB;
+                const id = r.id as string;
                 return (
                   <li
                     key={r.id}
+                    draggable
+                    onDragStart={(ev) => {
+                      ev.dataTransfer.setData(WORKSPACE_AI_DRAG_MIME, r.id);
+                      ev.dataTransfer.effectAllowed = "copy";
+                    }}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-panel px-3 py-2.5"
                   >
-                    <div className="flex items-start gap-2 min-w-0">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      {signedIn ? (
+                        <input
+                          type="checkbox"
+                          className="mt-2 h-4 w-4 shrink-0 rounded border-input"
+                          checked={selected.has(id)}
+                          onChange={() => toggleSelect(id)}
+                          aria-label={`Select ${primary}`}
+                        />
+                      ) : null}
+                      <EvidenceListThumbnail
+                        evidenceId={r.id}
+                        mimeType={r.mime_type ?? null}
+                        filenameHint={r.original_filename}
+                        size="library"
+                      />
                       <div className="min-w-0">
                         <Link
                           href={href}
@@ -242,12 +321,28 @@ export function EvidenceLibraryClient({
                         {r.short_alias ? (
                           <p className="font-mono text-[11px] text-muted-foreground">{r.short_alias}</p>
                         ) : null}
-                        <div className="mt-1">
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <EvidenceKindBadge row={r} />
                           <EvidenceStatusBullets kinds={bullets} />
                         </div>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="h-8 border-sky-400 bg-sky-50 text-[10px] font-semibold text-sky-950 hover:bg-sky-100"
+                        onClick={() =>
+                          dispatchWorkspaceAiAttachEvidence({
+                            evidenceId: r.id,
+                            caseId: r.case_id ? String(r.case_id) : null,
+                            label: primary,
+                          })
+                        }
+                      >
+                        Send to AI
+                      </Button>
                       <Button
                         type="button"
                         size="sm"
@@ -258,7 +353,7 @@ export function EvidenceLibraryClient({
                         {staged ? "Selected" : "Compare"}
                       </Button>
                       <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {r.case_id || r.case_membership_count > 0 ? "On a case" : "Unassigned evidence"}
+                        {r.case_id || r.case_membership_count > 0 ? "On a case" : "Add to case"}
                       </span>
                     </div>
                   </li>
@@ -266,6 +361,14 @@ export function EvidenceLibraryClient({
               })}
             </ul>
           )}
+          {signedIn && selected.size > 0 ? (
+            <EvidenceBulkActionBar
+              variant="library"
+              casesForAssign={casesForAssign}
+              selectedIds={[...selected]}
+              onClearSelection={() => setSelected(new Set())}
+            />
+          ) : null}
         </CardContent>
       </Card>
     </div>

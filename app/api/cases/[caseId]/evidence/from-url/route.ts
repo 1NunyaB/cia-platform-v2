@@ -5,7 +5,6 @@ import { normalizeEvidenceSourcePayload, type EvidenceSourceType } from "@/lib/e
 import { requestClientIp, requestUserAgent } from "@/lib/request-audit";
 import { resolveRequestActor } from "@/lib/resolve-request-actor";
 import { logUsageEvent } from "@/services/usage-log-service";
-import { deferExtractionFromJsonBody } from "@/lib/evidence-defer-extraction";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 import { NextResponse } from "next/server";
 
@@ -19,26 +18,9 @@ type UrlImportItemResponse = {
   existing?: unknown;
   needs_extraction?: boolean;
   message?: string;
-  deferred_extraction?: boolean;
   error?: string;
-  import_status:
-    | "imported"
-    | "duplicate_skipped"
-    | "extraction_queued"
-    | "extraction_complete"
-    | "extraction_partial"
-    | "extraction_failed";
+  import_status: "imported" | "duplicate_skipped" | "failed";
 };
-
-function classifyImportStatus(payload: { warning?: string; deferred_extraction?: boolean }) {
-  if (payload.deferred_extraction) return "extraction_queued" as const;
-  if (!payload.warning) return "extraction_complete" as const;
-  if (payload.warning.includes("Text extraction was not possible")) return "extraction_failed" as const;
-  if (payload.warning.toLowerCase().includes("placeholder") || payload.warning.toLowerCase().includes("missing")) {
-    return "extraction_partial" as const;
-  }
-  return "imported" as const;
-}
 
 export async function POST(
   request: Request,
@@ -85,7 +67,6 @@ export async function POST(
 
   const uploaderIp = requestClientIp(request);
   const userAgent = requestUserAgent(request);
-  const deferExtraction = deferExtractionFromJsonBody(body);
 
   const results: UrlImportItemResponse[] = [];
   for (const currentUrl of urls) {
@@ -96,7 +77,6 @@ export async function POST(
         url: currentUrl,
         source: { ...source, source_url: source.source_url?.trim() || currentUrl },
         forceDuplicate,
-        deferExtraction,
         audit: { uploaderIp, userAgent, uploadMethod: "url_import" },
       });
       await logUsageEvent({
@@ -108,22 +88,20 @@ export async function POST(
         url: currentUrl,
         id: r.id,
         warning: r.warning,
-        ...(r.deferred_extraction ? { deferred_extraction: true } : {}),
-        import_status: classifyImportStatus({ warning: r.warning, deferred_extraction: r.deferred_extraction }),
+        import_status: "imported",
       });
     } catch (e) {
       if (e instanceof EvidenceDuplicateError) {
         const dupBody = await buildDuplicateEvidenceResponse(supabase, e);
         results.push({
-          url: currentUrl,
-          duplicate: true,
-          import_status: "duplicate_skipped",
           ...dupBody,
+          url: currentUrl,
+          import_status: "duplicate_skipped",
         });
         continue;
       }
       const message = e instanceof Error ? e.message : "Import failed";
-      results.push({ url: currentUrl, error: message, import_status: "extraction_failed" });
+      results.push({ url: currentUrl, error: message, import_status: "failed" });
     }
   }
 
@@ -135,12 +113,13 @@ export async function POST(
     if (single.error) {
       return NextResponse.json({ error: single.error }, { status: 400 });
     }
-    const legacy = {
-      id: single.id,
-      ...(single.warning ? { warning: single.warning } : {}),
-      ...(single.deferred_extraction ? { deferred_extraction: true } : {}),
-    };
-    return NextResponse.json(legacy, { status: 201 });
+    return NextResponse.json(
+      {
+        id: single.id,
+        ...(single.warning ? { warning: single.warning } : {}),
+      },
+      { status: 201 },
+    );
   }
 
   return NextResponse.json({ results }, { status: 200 });

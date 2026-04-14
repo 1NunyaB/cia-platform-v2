@@ -13,13 +13,11 @@ import {
   EVIDENCE_BUCKET,
   findDuplicateGuestEvidence,
   registerGuestEvidenceFile,
+  updateEvidenceStatus,
 } from "@/services/evidence-service";
 import { scanEvidenceBuffer } from "@/services/evidence-scan-service";
-import { extractTextForEvidence } from "@/services/text-extraction-service";
 import { buildImportFilename, fetchTextFromPublicUrl } from "@/services/url-import-service";
 import { parsePublicHttpUrl } from "@/lib/url-import-utils";
-import { EXTRACTION_SOFT_FAILURE_CLIENT_MESSAGE } from "@/lib/extraction-user-messages";
-import { updateEvidenceExtractionFields } from "@/services/evidence-service";
 
 import type { IngestResult } from "@/services/case-evidence-ingest";
 
@@ -59,10 +57,9 @@ export async function ingestGuestUploadedFile(
       userAgent?: string | null;
       uploadMethod: "single_file" | "bulk";
     };
-    deferExtraction?: boolean;
   },
 ): Promise<IngestResult> {
-  const { guestSessionId, file, source, forceDuplicate, audit, deferExtraction } = input;
+  const { guestSessionId, file, source, forceDuplicate, audit } = input;
   const buffer = Buffer.from(await file.arrayBuffer());
   const mime = file.type || null;
   const contentSha256 = sha256Hex(buffer);
@@ -156,34 +153,7 @@ export async function ingestGuestUploadedFile(
     throw e;
   }
 
-  if (deferExtraction) {
-    await updateEvidenceExtractionFields(supabase, evidenceId, {
-      extractionStatus: "pending",
-      extractionUserMessage:
-        "Extraction was skipped at upload. Open this evidence file and run extraction when you are ready.",
-    });
-    return { id: evidenceId, deferred_extraction: true };
-  }
-
-  try {
-    const extracted = await extractTextForEvidence(supabase, evidenceId, mime);
-    if (!extracted.ok) {
-      return { id: evidenceId, warning: EXTRACTION_SOFT_FAILURE_CLIENT_MESSAGE };
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Extraction failed unexpectedly";
-    console.error("[guest ingest] extractTextForEvidence threw:", e);
-    try {
-      await updateEvidenceExtractionFields(supabase, evidenceId, {
-        extractionStatus: "retry_needed",
-        extractionUserMessage: msg,
-      });
-    } catch (patchErr) {
-      console.warn("[guest ingest] could not persist extraction error:", patchErr);
-    }
-    return { id: evidenceId, warning: EXTRACTION_SOFT_FAILURE_CLIENT_MESSAGE };
-  }
-
+  await updateEvidenceStatus(supabase, evidenceId, "complete");
   return { id: evidenceId };
 }
 
@@ -199,10 +169,9 @@ export async function ingestGuestEvidenceFromUrl(
       userAgent?: string | null;
       uploadMethod?: "url_import";
     };
-    deferExtraction?: boolean;
   },
 ): Promise<IngestResult> {
-  const { guestSessionId, url, source, forceDuplicate, audit, deferExtraction } = input;
+  const { guestSessionId, url, source, forceDuplicate, audit } = input;
   const parsed = parsePublicHttpUrl(url);
   const fetched = await fetchTextFromPublicUrl(url);
   const { text, extractionNote: fetchNote } = fetched;
@@ -300,34 +269,6 @@ export async function ingestGuestEvidenceFromUrl(
     throw e;
   }
 
-  if (deferExtraction) {
-    await updateEvidenceExtractionFields(supabase, evidenceId, {
-      extractionStatus: "pending",
-      extractionUserMessage:
-        "Extraction was skipped at import. Open this evidence file and run extraction when you are ready.",
-    });
-    return { id: evidenceId, deferred_extraction: true };
-  }
-
-  try {
-    const extracted = await extractTextForEvidence(supabase, evidenceId, "text/plain");
-    if (!extracted.ok) {
-      const w = [fetchNote, EXTRACTION_SOFT_FAILURE_CLIENT_MESSAGE].filter(Boolean).join(" ");
-      return { id: evidenceId, warning: w };
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Extraction failed unexpectedly";
-    console.error("[guest ingest] URL extract threw:", e);
-    try {
-      await updateEvidenceExtractionFields(supabase, evidenceId, {
-        extractionStatus: "retry_needed",
-        extractionUserMessage: msg,
-      });
-    } catch (patchErr) {
-      console.warn("[guest ingest] could not persist extraction error:", patchErr);
-    }
-    return { id: evidenceId, warning: [fetchNote, EXTRACTION_SOFT_FAILURE_CLIENT_MESSAGE].filter(Boolean).join(" ") };
-  }
-
+  await updateEvidenceStatus(supabase, evidenceId, "complete");
   return fetchNote ? { id: evidenceId, warning: fetchNote } : { id: evidenceId };
 }
