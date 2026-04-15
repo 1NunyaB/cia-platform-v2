@@ -220,7 +220,7 @@ export function WorkspaceShellWithPanel({
   }, [notesDragging, persistNotesHeight]);
 
   React.useEffect(() => {
-    const onMove = (e: PointerEvent) => {
+    const onMove = (e: MouseEvent) => {
       if (!aiDraggingRef.current) return;
       const delta = e.clientY - aiStartYRef.current;
       const available = rightBodyRef.current?.clientHeight ?? 640;
@@ -239,13 +239,11 @@ export function WorkspaceShellWithPanel({
       document.body.style.removeProperty("cursor");
       document.body.style.removeProperty("user-select");
     };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
     return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
       document.body.style.removeProperty("cursor");
       document.body.style.removeProperty("user-select");
     };
@@ -271,12 +269,11 @@ export function WorkspaceShellWithPanel({
     setNotesDragging(true);
   }, [notesHeightPx]);
 
-  const onAiResizePointerDown = React.useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const onAiResizeMouseDown = React.useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     aiDraggingRef.current = true;
     aiStartYRef.current = e.clientY;
     aiStartHeightRef.current = aiHeightPx;
-    e.currentTarget.setPointerCapture(e.pointerId);
     document.body.style.cursor = "row-resize";
     document.body.style.userSelect = "none";
   }, [aiHeightPx]);
@@ -359,8 +356,8 @@ export function WorkspaceShellWithPanel({
               role="separator"
               aria-orientation="horizontal"
               aria-label="Resize AI panel"
-              onPointerDown={onAiResizePointerDown}
-              className="h-2 shrink-0 cursor-row-resize border-y border-border/60 bg-border/30"
+              onMouseDown={onAiResizeMouseDown}
+              className="h-[3px] shrink-0 cursor-row-resize border-y border-border/60 bg-border/30"
             />
             <div ref={notesAreaRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="flex flex-shrink-0 flex-col overflow-hidden py-2.5" style={{ height: notesHeightPx }}>
