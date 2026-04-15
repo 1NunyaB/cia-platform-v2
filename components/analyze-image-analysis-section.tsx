@@ -43,7 +43,7 @@ export function AnalyzeImageAnalysisSection() {
         setLoadingCats(false);
         return;
       }
-      const data = (await res.json()) as { categories?: ImageCategoryRow[] };
+      const data = (await res.json().catch(() => ({}))) as { categories?: ImageCategoryRow[] };
       setCategories(Array.isArray(data.categories) ? data.categories : []);
       setSignedIn(true);
       setLoadingCats(false);
@@ -70,7 +70,7 @@ export function AnalyzeImageAnalysisSection() {
       setLoadingList(false);
       return;
     }
-    const data = (await res.json()) as { evidence?: EvidenceFile[] };
+    const data = (await res.json().catch(() => ({}))) as { evidence?: EvidenceFile[] };
     setEvidence(Array.isArray(data.evidence) ? data.evidence : []);
     setLoadingList(false);
   }, [activeCategory, signedIn]);

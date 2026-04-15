@@ -29,7 +29,7 @@ export default function EvidenceMapPage() {
       setLoading(false);
       return;
     }
-    const data = (await res.json()) as { pins?: LocationMapPinRow[] };
+    const data = (await res.json().catch(() => ({}))) as { pins?: LocationMapPinRow[] };
     setPins(Array.isArray(data.pins) ? data.pins : []);
     setUnauthorized(false);
     setLoading(false);
