@@ -60,13 +60,11 @@ export default async function ClusterDetailPage({
           <CardDescription>Open each linked evidence file or run/update cluster analysis.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ul>
-            <EvidenceClusterBlock
-              caseId={caseId}
-              cluster={cluster}
-              initialAnalysis={analyses[cluster.id] ?? null}
-            />
-          </ul>
+          <EvidenceClusterBlock
+            caseId={caseId}
+            cluster={cluster}
+            initialAnalysis={analyses[cluster.id] ?? null}
+          />
         </CardContent>
       </Card>
     </div>

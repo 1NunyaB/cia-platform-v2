@@ -27,9 +27,13 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
+<<<<<<< HEAD
     "mapbox-gl": "^3.21.0",
     "next": "15.1.0",
     "nodemailer": "^8.0.5",
+=======
+    "next": "15.1.11",
+>>>>>>> 40aa4c9cb92a17b64b117d0490c326375bce69af
     "openai": "^4.76.0",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
