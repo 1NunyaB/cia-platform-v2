@@ -17,6 +17,15 @@ export type WorkspaceRouteContext = {
   evidenceId: string | null;
   /** In-app path suitable for markdown links and `<Link href>`. */
   evidenceLinkPath: string | null;
+  /** Lightweight route context used for AI capability-aware hints. */
+  pageKind:
+    | "dashboard"
+    | "cases"
+    | "case_detail"
+    | "case_evidence"
+    | "evidence"
+    | "analyze"
+    | "other";
 };
 
 /**
@@ -27,7 +36,7 @@ export function parseWorkspaceRouteContext(pathname: string): WorkspaceRouteCont
 
   if (parts[0] === "cases" && parts[1] && parts[1] !== "new") {
     if (!isUuid(parts[1])) {
-      return { caseId: null, evidenceId: null, evidenceLinkPath: null };
+      return { caseId: null, evidenceId: null, evidenceLinkPath: null, pageKind: "cases" };
     }
     const caseId = parts[1];
     if (parts[2] === "evidence" && isUuid(parts[3])) {
@@ -36,9 +45,10 @@ export function parseWorkspaceRouteContext(pathname: string): WorkspaceRouteCont
         caseId,
         evidenceId,
         evidenceLinkPath: `/cases/${caseId}/evidence/${evidenceId}`,
+        pageKind: "case_evidence",
       };
     }
-    return { caseId, evidenceId: null, evidenceLinkPath: null };
+    return { caseId, evidenceId: null, evidenceLinkPath: null, pageKind: "case_detail" };
   }
 
   if (parts[0] === "evidence" && isUuid(parts[1])) {
@@ -47,8 +57,18 @@ export function parseWorkspaceRouteContext(pathname: string): WorkspaceRouteCont
       caseId: null,
       evidenceId,
       evidenceLinkPath: `/evidence/${evidenceId}`,
+      pageKind: "evidence",
     };
   }
 
-  return { caseId: null, evidenceId: null, evidenceLinkPath: null };
+  if (parts[0] === "dashboard") {
+    return { caseId: null, evidenceId: null, evidenceLinkPath: null, pageKind: "dashboard" };
+  }
+  if (parts[0] === "cases") {
+    return { caseId: null, evidenceId: null, evidenceLinkPath: null, pageKind: "cases" };
+  }
+  if (parts[0] === "analyze") {
+    return { caseId: null, evidenceId: null, evidenceLinkPath: null, pageKind: "analyze" };
+  }
+  return { caseId: null, evidenceId: null, evidenceLinkPath: null, pageKind: "other" };
 }

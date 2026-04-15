@@ -1,6 +1,7 @@
 import type { AppSupabaseClient } from "@/types";
 import type { CaseNoteVisibility } from "@/types/collaboration";
 import { logActivity } from "@/services/activity-service";
+import { notifyCaseNoteAdded } from "@/services/notification-service";
 import { recordContribution } from "@/services/contributions-service";
 
 export async function addCaseNote(
@@ -47,6 +48,17 @@ export async function addCaseNote(
     entityType: "note",
     entityId: data!.id as string,
   });
+
+  if (input.authorId) {
+    void notifyCaseNoteAdded(supabase, {
+      caseId: input.caseId,
+      noteId: data!.id as string,
+      authorId: input.authorId,
+      bodyPreview: input.body,
+    }).catch(() => {
+      /* non-blocking */
+    });
+  }
 
   return { id: data!.id as string };
 }

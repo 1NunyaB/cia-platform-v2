@@ -106,14 +106,17 @@ export function EvidenceSourceFields({
       </div>
       <div className="space-y-2">
         <Label htmlFor={`${idPrefix}-url`} className={labelClass}>
-          Source URL (if applicable)
+          Source Site (optional — e.g. wikipedia.org)
         </Label>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Used for grouping and reference. Evidence is pulled from the links above.
+        </p>
         <Input
           id={`${idPrefix}-url`}
           name="source_url"
-          type="url"
+          type="text"
           inputMode="url"
-          placeholder="https://…"
+          placeholder="wikipedia.org"
           defaultValue={defaultUrl ?? ""}
           className={inputClass}
         />

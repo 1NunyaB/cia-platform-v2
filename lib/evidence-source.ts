@@ -32,6 +32,19 @@ export type EvidenceSourcePayload = {
   source_url: string | null;
 };
 
+function normalizeMaybeUrl(raw: string | null | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `https://${value}`;
+  try {
+    const u = new URL(withProtocol);
+    if (!u.hostname) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function parseEvidenceSourceFromFormData(fd: FormData): EvidenceSourcePayload {
   const raw = String(fd.get("source_type") ?? "").trim().toLowerCase();
   const source_type = (EVIDENCE_SOURCE_TYPES as readonly string[]).includes(raw)
@@ -39,12 +52,12 @@ export function parseEvidenceSourceFromFormData(fd: FormData): EvidenceSourcePay
     : "unknown";
   const platform = String(fd.get("source_platform") ?? "").trim();
   const program = String(fd.get("source_program") ?? "").trim();
-  const url = String(fd.get("source_url") ?? "").trim();
+  const url = normalizeMaybeUrl(String(fd.get("source_url") ?? ""));
   return {
     source_type,
     source_platform: platform || null,
     source_program: program || null,
-    source_url: url || null,
+    source_url: url,
   };
 }
 
@@ -57,6 +70,6 @@ export function normalizeEvidenceSourcePayload(input: Partial<EvidenceSourcePayl
     source_type,
     source_platform: input.source_platform?.trim() || null,
     source_program: input.source_program?.trim() || null,
-    source_url: input.source_url?.trim() || null,
+    source_url: normalizeMaybeUrl(input.source_url),
   };
 }

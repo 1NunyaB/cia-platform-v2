@@ -30,6 +30,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { CaseRecordMetaLine } from "@/components/case-record-meta-line";
+import { StartInvestigationButton } from "@/components/start-investigation-button";
+import { PutOnHoldButton } from "@/components/put-on-hold-button";
 
 export default async function CaseDetailPage({ params }: { params: Promise<{ caseId: string }> }) {
   const { caseId } = await params;
@@ -135,6 +137,11 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {!c.investigation_started_at ? (
+            <StartInvestigationButton caseId={caseId} />
+          ) : (
+            <PutOnHoldButton caseId={caseId} />
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/cases/${caseId}/entities`}>Entities</Link>
           </Button>
@@ -143,6 +150,9 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
           </Button>
           <Button variant="outline" size="sm" asChild>
             <Link href={`/cases/${caseId}/timeline`}>Timeline</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/cases/${caseId}/workspace`}>Case Workspace</Link>
           </Button>
         </div>
       </div>
@@ -173,7 +183,17 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ cas
             <ul className="space-y-2">
               {members.map((m) => (
                 <li key={m.id} className="flex justify-between text-sm">
-                  <span>{profiles[m.user_id as string]?.display_name ?? m.user_id}</span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="relative inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-muted text-[10px] font-semibold uppercase text-foreground">
+                      {(profiles[m.user_id as string]?.display_name ?? m.user_id ?? "?").slice(0, 1)}
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border border-background ${
+                          (m.investigator_presence ?? "active") === "away" ? "bg-red-600" : "bg-emerald-500"
+                        }`}
+                      />
+                    </span>
+                    <span>{profiles[m.user_id as string]?.display_name ?? m.user_id}</span>
+                  </span>
                   <span className="text-muted-foreground">{m.role}</span>
                 </li>
               ))}

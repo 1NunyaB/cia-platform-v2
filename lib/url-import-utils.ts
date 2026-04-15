@@ -6,11 +6,12 @@ export function parsePublicHttpUrl(urlStr: string): URL {
   if (!trimmed) {
     throw new Error("Enter a web address (URL) to import.");
   }
+  const normalizedInput = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   let u: URL;
   try {
-    u = new URL(trimmed);
+    u = new URL(normalizedInput);
   } catch {
-    throw new Error("That does not look like a valid web address. Use http:// or https://.");
+    throw new Error("That does not look like a valid web address.");
   }
   if (u.protocol !== "http:" && u.protocol !== "https:") {
     throw new Error("Only http and https links can be imported.");

@@ -52,10 +52,29 @@ export function LandingSuggestionBox() {
   }
 
   return (
-    <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900/75 p-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Suggestion Box</p>
-      <h2 className="mt-2 text-xl font-semibold tracking-tight text-white">Have an idea or feature request? Tell us.</h2>
-      <form onSubmit={onSubmit} className="mt-4 grid gap-3">
+    <section
+      id="suggest"
+      className="mt-12 rounded-3xl border border-red-300/42 bg-[linear-gradient(145deg,rgba(17,27,49,0.96),rgba(33,29,41,0.95))] p-6 shadow-[0_0_36px_rgba(239,68,68,0.18)] sm:p-8"
+    >
+      <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-yellow-300">Suggestion box</p>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-50 [font-family:Georgia,'Times_New_Roman',serif]">
+            Got a lead? Tell us.
+          </h2>
+          <p className="text-sm leading-relaxed text-slate-100">
+            Share product ideas, investigation workflow needs, or field feedback. We review submissions for roadmap
+            planning and operational improvements.
+          </p>
+          <p className="text-sm text-yellow-200">
+            Direct contact:{" "}
+            <a className="underline decoration-yellow-300/70 underline-offset-2 hover:text-yellow-100" href="mailto:fourmiapps@gmail.com">
+              fourmiapps@gmail.com
+            </a>
+          </p>
+        </div>
+
+        <form onSubmit={onSubmit} className="grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="suggest-name" className="text-slate-100">
@@ -66,7 +85,7 @@ export function LandingSuggestionBox() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
-              className="border-white/20 bg-slate-950/70 text-slate-100 placeholder:text-slate-400"
+              className="border-white/25 bg-slate-900/70 text-slate-50 placeholder:text-slate-300"
             />
           </div>
           <div className="space-y-1.5">
@@ -79,7 +98,7 @@ export function LandingSuggestionBox() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="border-white/20 bg-slate-950/70 text-slate-100 placeholder:text-slate-400"
+              className="border-white/25 bg-slate-900/70 text-slate-50 placeholder:text-slate-300"
             />
           </div>
         </div>
@@ -93,7 +112,7 @@ export function LandingSuggestionBox() {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Share your idea, feature request, or improvement..."
-            className="min-h-[120px] border-white/20 bg-slate-950/70 text-slate-100 placeholder:text-slate-400"
+            className="min-h-[120px] border-white/25 bg-slate-900/70 text-slate-50 placeholder:text-slate-300"
           />
         </div>
         <div className="hidden">
@@ -103,11 +122,16 @@ export function LandingSuggestionBox() {
         {error ? <p className="text-sm text-rose-300">{error}</p> : null}
         {ok ? <p className="text-sm text-emerald-300">Suggestion sent successfully</p> : null}
         <div>
-          <Button type="submit" disabled={loading} className="bg-sky-400 text-slate-950 hover:bg-sky-300">
+          <Button
+            type="submit"
+            disabled={loading}
+            className="bg-red-500 text-white shadow-[0_0_26px_rgba(239,68,68,0.5)] transition-all hover:bg-red-400 hover:shadow-[0_0_34px_rgba(248,113,113,0.62)]"
+          >
             {loading ? "Sending..." : "Send suggestion"}
           </Button>
         </div>
-      </form>
+        </form>
+      </div>
     </section>
   );
 }

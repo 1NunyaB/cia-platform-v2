@@ -6,6 +6,7 @@ import { requestClientIp, requestUserAgent } from "@/lib/request-audit";
 import { resolveRequestActor } from "@/lib/resolve-request-actor";
 import { logUsageEvent } from "@/services/usage-log-service";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
+import { parsePublicHttpUrl } from "@/lib/url-import-utils";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -71,21 +72,22 @@ export async function POST(
   const results: UrlImportItemResponse[] = [];
   for (const currentUrl of urls) {
     try {
+      const normalizedUrl = parsePublicHttpUrl(currentUrl).href;
       const r = await ingestEvidenceFromUrl(supabase, {
         caseId,
         userId: user.id,
-        url: currentUrl,
-        source: { ...source, source_url: source.source_url?.trim() || currentUrl },
+        url: normalizedUrl,
+        source: { ...source, source_url: source.source_url?.trim() || normalizedUrl },
         forceDuplicate,
         audit: { uploaderIp, userAgent, uploadMethod: "url_import" },
       });
       await logUsageEvent({
         userId: user.id,
         action: "evidence.url_import",
-        meta: { scope: "case", caseId, url: currentUrl },
+        meta: { scope: "case", caseId, url: normalizedUrl },
       });
       results.push({
-        url: currentUrl,
+        url: normalizedUrl,
         id: r.id,
         warning: r.warning,
         import_status: "imported",

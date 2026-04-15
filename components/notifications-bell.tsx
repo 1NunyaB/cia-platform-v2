@@ -4,17 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, Check, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNotificationsRealtime } from "@/hooks/use-notifications-realtime";
+import { HIGH_PRIORITY_NOTIFICATION_KINDS } from "@/lib/notification-kinds";
 import { cn } from "@/lib/utils";
-
-type NotificationRow = {
-  id: string;
-  kind: string;
-  title: string;
-  body: string | null;
-  payload: Record<string, unknown>;
-  read_at: string | null;
-  created_at: string;
-};
+import type { UserNotificationRow } from "@/services/notification-service";
 
 type SharePayload = {
   proposal_id?: string;
@@ -40,17 +33,27 @@ function asSharePayload(p: Record<string, unknown>): SharePayload {
   };
 }
 
-export function NotificationsBell() {
+function notificationHref(n: UserNotificationRow): string | null {
+  if (n.link_url?.trim()) return n.link_url;
+  if (n.case_id) return `/cases/${n.case_id}`;
+  const p = n.payload ?? {};
+  if (typeof p.case_id === "string") return `/cases/${p.case_id}`;
+  if (typeof p.target_case_id === "string") return `/cases/${p.target_case_id}`;
+  return null;
+}
+
+export function NotificationsBell({ userId }: { userId: string }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<NotificationRow[]>([]);
+  const [items, setItems] = useState<UserNotificationRow[]>([]);
   const [responding, setResponding] = useState<{ proposalId: string; kind: "accept" | "decline" } | null>(null);
+  const [lastAcknowledgedPriorityId, setLastAcknowledgedPriorityId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/notifications");
-      const data = (await res.json()) as { notifications?: NotificationRow[]; error?: string };
+      const data = (await res.json()) as { notifications?: UserNotificationRow[]; error?: string };
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Failed to load");
       setItems(Array.isArray(data.notifications) ? data.notifications : []);
     } catch {
@@ -64,11 +67,39 @@ export function NotificationsBell() {
     void load();
   }, [load]);
 
+  const onRealtimeInsert = useCallback((row: UserNotificationRow) => {
+    setItems((prev) => {
+      if (prev.some((x) => x.id === row.id)) return prev;
+      return [row, ...prev];
+    });
+  }, []);
+
+  useNotificationsRealtime(userId, onRealtimeInsert);
+
   const unread = items.filter((n) => !n.read_at).length;
+  const newestHighPriorityUnread = items.find(
+    (n) => !n.read_at && HIGH_PRIORITY_NOTIFICATION_KINDS.has(n.kind),
+  );
+  const shouldFlashPriorityAlert =
+    !!newestHighPriorityUnread && newestHighPriorityUnread.id !== lastAcknowledgedPriorityId;
+
+  useEffect(() => {
+    if (open && newestHighPriorityUnread?.id) {
+      setLastAcknowledgedPriorityId(newestHighPriorityUnread.id);
+    }
+  }, [open, newestHighPriorityUnread?.id]);
 
   async function markRead(id: string) {
     await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)));
+  }
+
+  async function markAllRead() {
+    const res = await fetch("/api/notifications/read-all", { method: "POST" });
+    if (res.ok) {
+      const now = new Date().toISOString();
+      setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? now })));
+    }
   }
 
   async function respond(proposalId: string, accept: boolean, notificationId: string) {
@@ -98,7 +129,10 @@ export function NotificationsBell() {
         type="button"
         variant="outline"
         size="sm"
-        className="relative gap-1.5 border-border"
+        className={cn(
+          "relative gap-1.5 border-border",
+          shouldFlashPriorityAlert ? "ring-1 ring-red-500/70 shadow-[0_0_0_1px_rgba(239,68,68,0.25)]" : "",
+        )}
         aria-label="Notifications"
         onClick={() => {
           setOpen((o) => !o);
@@ -106,6 +140,15 @@ export function NotificationsBell() {
         }}
       >
         <Bell className="h-4 w-4" aria-hidden />
+        {shouldFlashPriorityAlert ? (
+          <span
+            aria-hidden
+            className="absolute -left-2 -top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white cis-notification-alert-flash"
+            title="Important notification"
+          >
+            🚨
+          </span>
+        ) : null}
         {unread > 0 ? (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-700 px-1 text-[10px] font-semibold text-white">
             {unread > 9 ? "9+" : unread}
@@ -126,8 +169,17 @@ export function NotificationsBell() {
               "absolute right-0 top-full z-50 mt-2 w-[min(100vw-2rem,22rem)] rounded-lg border border-border bg-card shadow-lg",
             )}
           >
-            <div className="border-b border-border px-3 py-2 text-xs font-semibold text-muted-foreground">
-              Notifications
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <span className="text-xs font-semibold text-muted-foreground">Notifications</span>
+              {unread > 0 ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-medium text-blue-800 underline underline-offset-2 hover:text-blue-900"
+                  onClick={() => void markAllRead()}
+                >
+                  Mark all read
+                </button>
+              ) : null}
             </div>
             <div className="max-h-[min(70vh,24rem)] overflow-y-auto">
               {loading && items.length === 0 ? (
@@ -141,13 +193,13 @@ export function NotificationsBell() {
                 <ul className="divide-y divide-border">
                   {items.map((n) => {
                     const sp = n.kind === "evidence_share_proposal" ? asSharePayload(n.payload) : {};
-                    const busy =
-                      sp.proposal_id &&
-                      responding?.proposalId === sp.proposal_id;
+                    const href = notificationHref(n);
+                    const busy = sp.proposal_id && responding?.proposalId === sp.proposal_id;
+
                     return (
                       <li key={n.id} className="p-3 text-sm">
-                        <p className="font-medium text-foreground leading-snug">{n.title}</p>
-                        {n.body ? <p className="mt-1 text-xs text-muted-foreground line-clamp-3">{n.body}</p> : null}
+                        <p className="font-medium leading-snug text-foreground">{n.title}</p>
+                        {n.body ? <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{n.body}</p> : null}
                         {n.kind === "evidence_share_proposal" && sp.proposal_id && sp.target_case_id ? (
                           <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
                             {sp.source_case_title ? (
@@ -216,6 +268,29 @@ export function NotificationsBell() {
                                 </Link>
                               </Button>
                             </div>
+                          </div>
+                        ) : n.kind === "evidence_share_proposal" ? (
+                          <button
+                            type="button"
+                            className="mt-2 text-xs text-blue-800 underline"
+                            onClick={() => void markRead(n.id)}
+                          >
+                            Mark read
+                          </button>
+                        ) : href ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button variant="ghost" size="sm" className="h-8" asChild>
+                              <Link href={href} onClick={() => void markRead(n.id)}>
+                                Open
+                              </Link>
+                            </Button>
+                            <button
+                              type="button"
+                              className="text-xs text-blue-800 underline"
+                              onClick={() => void markRead(n.id)}
+                            >
+                              Mark read
+                            </button>
                           </div>
                         ) : (
                           <button

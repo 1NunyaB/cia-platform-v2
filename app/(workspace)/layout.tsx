@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { WorkspaceMainNav } from "@/components/workspace-main-nav";
 import { Button } from "@/components/ui/button";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { GuestModeBanner } from "@/components/guest-mode-banner";
@@ -51,7 +52,8 @@ export default async function WorkspaceLayout({
   if (user) {
     let chatMessages: Awaited<ReturnType<typeof listRecentDashboardChat>> = [];
     try {
-      chatMessages = await listRecentDashboardChat(supabase, 120);
+      /** Keep initial chat payload small for RSC (messages load more via client refresh). */
+      chatMessages = await listRecentDashboardChat(supabase, 45);
     } catch {
       chatMessages = [];
     }
@@ -72,9 +74,9 @@ export default async function WorkspaceLayout({
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <GuestModeBanner />
       <header className="border-b border-border bg-card shadow-sm">
-        <div className="flex h-14 w-full items-center justify-between gap-4">
-          <nav className="flex items-center gap-4 text-sm">
-            <div className="flex flex-col gap-0.5">
+        <div className="grid h-14 w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-4">
+          <div className="flex min-w-0 items-center justify-self-start">
+            <div className="flex shrink-0 flex-col gap-0.5">
               <Link href="/" className="font-semibold leading-tight">
                 CIS
               </Link>
@@ -91,42 +93,12 @@ export default async function WorkspaceLayout({
                 </span>
               ) : null}
             </div>
-            <Link
-              href="/dashboard"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/cases"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Cases
-            </Link>
-            <Link
-              href="/evidence"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Evidence
-            </Link>
-            <Link
-              href="/analyze"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Analyze
-            </Link>
-            {user ? (
-              <Link
-                href="/investigators"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Investigators
-              </Link>
-            ) : null}
-          </nav>
+          </div>
 
-          <div className="flex items-center gap-2">
-            {user ? <NotificationsBell /> : null}
+          <WorkspaceMainNav showInvestigators={Boolean(user)} />
+
+          <div className="flex min-w-0 items-center justify-end justify-self-end gap-2">
+            {user ? <NotificationsBell userId={user.id} /> : null}
             {!user ? (
               <Button variant="outline" size="sm" asChild>
                 <Link href="/login">Sign in</Link>

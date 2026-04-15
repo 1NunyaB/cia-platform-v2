@@ -6,8 +6,10 @@ import {
 } from "@/lib/evidence-upload-errors";
 import { assertEvidenceUploadAllowed } from "@/lib/evidence-upload-policy";
 import { logActivity } from "@/services/activity-service";
+import { notifyEvidenceAddedToCase } from "@/services/notification-service";
 import { EvidenceDuplicateError } from "@/lib/evidence-upload-errors";
 import { sha256Hex } from "@/lib/file-fingerprint";
+import { isImageCategoryName } from "@/lib/image-categories";
 import {
   buildStoragePath,
   EVIDENCE_BUCKET,
@@ -64,11 +66,18 @@ export async function ingestUploadedFile(
       userAgent?: string | null;
       uploadMethod: "single_file" | "bulk";
     };
+    /** Image Analysis hub folder name; storage under `images/{name}/...` and `evidence_files.image_category`. */
+    imageCategory?: string | null;
   },
 ): Promise<IngestResult> {
-  const { caseId, userId, file, source, forceDuplicate, audit } = input;
+  const { caseId, userId, file, source, forceDuplicate, audit, imageCategory } = input;
   const buffer = Buffer.from(await file.arrayBuffer());
   const mime = file.type || null;
+  const normalizedCategory =
+    imageCategory && isImageCategoryName(imageCategory) ? imageCategory : null;
+  if (normalizedCategory && !(mime ?? "").toLowerCase().startsWith("image/")) {
+    throw new Error("Image category uploads require an image file (e.g. JPEG, PNG).");
+  }
   const contentSha256 = sha256Hex(buffer);
 
   if (!forceDuplicate) {
@@ -126,7 +135,7 @@ export async function ingestUploadedFile(
   }
 
   const evidenceId = crypto.randomUUID();
-  const path = buildStoragePath(caseId, userId, evidenceId, file.name);
+  const path = buildStoragePath(caseId, userId, evidenceId, file.name, normalizedCategory);
 
   const { error: upErr } = await supabase.storage
     .from(EVIDENCE_BUCKET)
@@ -148,6 +157,7 @@ export async function ingestUploadedFile(
       contentSha256,
       processingStatus: "accepted",
       ...(source ? { source } : {}),
+      ...(normalizedCategory ? { imageCategory: normalizedCategory } : {}),
       ...(audit
         ? {
             audit: {
@@ -164,6 +174,16 @@ export async function ingestUploadedFile(
   }
 
   await updateEvidenceStatus(supabase, evidenceId, "complete");
+  if (caseId) {
+    void notifyEvidenceAddedToCase(supabase, {
+      caseId,
+      evidenceId,
+      filename: file.name,
+      uploadedByUserId: userId,
+    }).catch(() => {
+      /* non-blocking */
+    });
+  }
   return { id: evidenceId };
 }
 
@@ -188,7 +208,7 @@ export async function ingestEvidenceFromUrl(
   const { caseId, userId, url, source, forceDuplicate, audit } = input;
   const parsed = parsePublicHttpUrl(url);
   const fetched = await fetchTextFromPublicUrl(url);
-  const { text, extractionNote: fetchNote } = fetched;
+  const { text, extractionNote: fetchNote, rawHtml } = fetched;
 
   const filename = buildImportFilename(parsed);
   const buffer = Buffer.from(text, "utf8");
@@ -286,7 +306,28 @@ export async function ingestEvidenceFromUrl(
     throw e;
   }
 
+  if (rawHtml?.trim()) {
+    const rawPath = `${path}.raw.html`;
+    try {
+      await supabase.storage
+        .from(EVIDENCE_BUCKET)
+        .upload(rawPath, Buffer.from(rawHtml, "utf8"), { contentType: "text/html; charset=utf-8", upsert: true });
+    } catch {
+      // Non-blocking: cleaned evidence text is already stored for investigation and AI usage.
+    }
+  }
+
   await updateEvidenceStatus(supabase, evidenceId, "complete");
+  if (caseId) {
+    void notifyEvidenceAddedToCase(supabase, {
+      caseId,
+      evidenceId,
+      filename,
+      uploadedByUserId: userId,
+    }).catch(() => {
+      /* non-blocking */
+    });
+  }
   return fetchNote ? { id: evidenceId, warning: fetchNote } : { id: evidenceId };
 }
 

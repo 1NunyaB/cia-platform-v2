@@ -104,6 +104,10 @@ export type CaseRow = {
   accused_label?: string | null;
   victim_labels?: string | null;
   known_weapon?: string | null;
+  investigation_started_at?: string | null;
+  investigation_started_by?: string | null;
+  investigation_on_hold_at?: string | null;
+  investigation_on_hold_by?: string | null;
 };
 
 export type CaseMember = {
@@ -113,6 +117,8 @@ export type CaseMember = {
   role: CaseMemberRole;
   invited_by: string | null;
   created_at: string;
+  investigator_presence?: "active" | "away";
+  presence_updated_at?: string;
 };
 
 /** Ingest path for internal audit (`evidence_upload_audit`); not shown on default evidence surfaces. */
@@ -167,6 +173,23 @@ export type EvidenceFile = {
   /** User-confirmed kind after review; null until confirmed. */
   confirmed_evidence_kind?: string | null;
   evidence_kind_confirmed_at?: string | null;
+  /** Image Analysis hub folder; matches `image_categories.name`. */
+  image_category?: string | null;
+  /** WGS84; used with `longitude` for the Location evidence map when `image_category` is `location`. */
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+/** Pins for `/map` (location-category evidence with coordinates). */
+export type LocationMapPinRow = {
+  id: string;
+  href: string;
+  title: string;
+  shortAlias: string | null;
+  caseTitle: string | null;
+  caseId: string | null;
+  latitude: number;
+  longitude: number;
 };
 
 export type ExtractedText = {

@@ -1,151 +1,106 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import { Link2, Plus, Trash2 } from "lucide-react";
+import { Bold, Expand, List, Plus, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { EmptyState } from "@/components/ui/empty-state";
-import {
-  getLegacyWorkpadStorageKey,
-  getWorkspaceNotesStorageKey,
-  parseNotesJson,
-  type WorkspaceNote,
-} from "@/lib/workspace-notes-storage";
 import { parseWorkspaceRouteContext } from "@/lib/workspace-route-context";
+import {
+  getWorkspaceCaseNotesStorageKey,
+  loadWorkspaceCaseNotes,
+  makeDefaultPage,
+  makeDefaultSection,
+  type CaseNotePage,
+  type WorkspaceCaseNotesData,
+} from "@/lib/workspace-case-notes-storage";
+import { WORKSPACE_NOTE_CONTEXT_EVENT, type WorkspaceNoteContextDetail } from "@/lib/workspace-note-links-bridge";
 import { cn } from "@/lib/utils";
+
 type WorkspaceNotesPanelProps = {
   ownerKey: string;
   canDelete: boolean;
-  /** Tighter layout for the narrow sidebar notes stack. */
   density?: "default" | "compact";
 };
 
-function formatNoteTimestamp(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return "";
-  }
-}
+const WORKSPACE_CASE_KEY = "__workspace__";
 
-function loadNotesWithMigration(storageKey: string, ownerKey: string): WorkspaceNote[] {
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    let notes = parseNotesJson(raw);
-    if (notes.length === 0) {
-      const legacy = window.localStorage.getItem(getLegacyWorkpadStorageKey(ownerKey));
-      if (legacy && legacy.trim()) {
-        const t = new Date().toISOString();
-        notes = [
-          {
-            id: crypto.randomUUID(),
-            title: "",
-            body: legacy,
-            createdAt: t,
-            updatedAt: t,
-          },
-        ];
-        window.localStorage.setItem(storageKey, JSON.stringify(notes));
-      }
-    }
-    return notes;
-  } catch {
-    return [];
-  }
-}
-
-function evidenceLinkMarkdown(path: string): string {
-  return `\n[Evidence](${path})\n`;
-}
-
-export function WorkspaceNotesPanel({ ownerKey, canDelete, density = "default" }: WorkspaceNotesPanelProps) {
+export function WorkspaceNotesPanel({ ownerKey, density = "default" }: WorkspaceNotesPanelProps) {
   const pathname = usePathname();
   const route = React.useMemo(() => parseWorkspaceRouteContext(pathname), [pathname]);
+  const caseKey = route.caseId ?? WORKSPACE_CASE_KEY;
+  const storageKey = getWorkspaceCaseNotesStorageKey(ownerKey);
+  const compact = density === "compact";
 
-  const storageKey = getWorkspaceNotesStorageKey(ownerKey);
-  const [notes, setNotes] = React.useState<WorkspaceNote[]>([]);
+  const [data, setData] = React.useState<WorkspaceCaseNotesData>({ notebooks: [] });
+  const [activeSectionId, setActiveSectionId] = React.useState<string | null>(null);
+  const [activePageId, setActivePageId] = React.useState<string | null>(null);
+  const [expanded, setExpanded] = React.useState(false);
+  const [context, setContext] = React.useState<WorkspaceNoteContextDetail>({
+    caseId: null,
+    selectedEvidenceIds: [],
+    activeTimelineEventId: null,
+    activeMarkerId: null,
+    activeLocationLabel: null,
+  });
   const saveTimerRef = React.useRef<number | undefined>(undefined);
-  const notesRef = React.useRef<WorkspaceNote[]>([]);
-  notesRef.current = notes;
-
-  /** When viewing a case, choose workspace-wide vs investigation-scoped notes. */
-  const [noteScope, setNoteScope] = React.useState<"workspace" | "case">("workspace");
-  const [activeNoteId, setActiveNoteId] = React.useState<string | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   React.useEffect(() => {
-    if (route.caseId) {
-      setNoteScope("case");
-    } else {
-      setNoteScope("workspace");
-    }
-  }, [route.caseId]);
+    setData(loadWorkspaceCaseNotes(ownerKey));
+  }, [ownerKey]);
 
   React.useEffect(() => {
-    setNotes(loadNotesWithMigration(storageKey, ownerKey));
-  }, [storageKey, ownerKey]);
+    const onContext = (e: Event) => {
+      const detail = (e as CustomEvent<WorkspaceNoteContextDetail>).detail;
+      if (detail) setContext(detail);
+    };
+    window.addEventListener(WORKSPACE_NOTE_CONTEXT_EVENT, onContext);
+    return () => window.removeEventListener(WORKSPACE_NOTE_CONTEXT_EVENT, onContext);
+  }, []);
 
-  const visibleNotes = React.useMemo(() => {
-    if (route.caseId && noteScope === "case") {
-      return notes.filter((n) => n.caseId === route.caseId);
-    }
-    return notes.filter((n) => !n.caseId);
-  }, [notes, route.caseId, noteScope]);
+  const notebook = React.useMemo(
+    () => data.notebooks.find((n) => n.caseId === caseKey) ?? { caseId: caseKey, sections: [makeDefaultSection()] },
+    [caseKey, data.notebooks],
+  );
+  const sections = notebook.sections;
+  const activeSection = sections.find((s) => s.id === activeSectionId) ?? sections[0] ?? null;
+  const pages = activeSection?.pages ?? [];
+  const activePage = pages.find((p) => p.id === activePageId) ?? pages[0] ?? null;
+
+  const recentPages = React.useMemo(
+    () =>
+      sections
+        .flatMap((s) => s.pages)
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        .slice(0, 5),
+    [sections],
+  );
 
   React.useEffect(() => {
-    if (visibleNotes.length === 0) {
-      setActiveNoteId(null);
-      return;
-    }
-    setActiveNoteId((prev) =>
-      prev && visibleNotes.some((n) => n.id === prev) ? prev : visibleNotes[0].id,
-    );
-  }, [visibleNotes]);
+    if (!activeSection && sections[0]) setActiveSectionId(sections[0].id);
+  }, [activeSection, sections]);
+  React.useEffect(() => {
+    if (!activePage && pages[0]) setActivePageId(pages[0].id);
+  }, [activePage, pages]);
 
   const persistSoon = React.useCallback(
-    (list: WorkspaceNote[]) => {
-      if (saveTimerRef.current !== undefined) {
-        window.clearTimeout(saveTimerRef.current);
-      }
+    (next: WorkspaceCaseNotesData) => {
+      if (saveTimerRef.current !== undefined) window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = window.setTimeout(() => {
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(list));
-        } catch {
-          /* ignore */
-        }
-      }, 400);
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+      }, 250);
     },
     [storageKey],
   );
 
-  React.useEffect(() => {
-    return () => {
-      if (saveTimerRef.current !== undefined) {
-        window.clearTimeout(saveTimerRef.current);
-      }
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(notesRef.current));
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [storageKey]);
-
-  const caseIdForNewNote = route.caseId && noteScope === "case" ? route.caseId : undefined;
-
-  const patchNote = React.useCallback(
-    (id: string, patch: Partial<Pick<WorkspaceNote, "title" | "body">>) => {
-      setNotes((prev) => {
-        const next = prev.map((n) => {
-          if (n.id !== id) return n;
-          const updatedAt = new Date().toISOString();
-          return { ...n, ...patch, updatedAt };
-        });
+  const mutateData = React.useCallback(
+    (updater: (prev: WorkspaceCaseNotesData) => WorkspaceCaseNotesData) => {
+      setData((prev) => {
+        const next = updater(prev);
         persistSoon(next);
         return next;
       });
@@ -153,279 +108,296 @@ export function WorkspaceNotesPanel({ ownerKey, canDelete, density = "default" }
     [persistSoon],
   );
 
-  const addNote = React.useCallback(() => {
-    const t = new Date().toISOString();
-    const note: WorkspaceNote = {
-      id: crypto.randomUUID(),
-      title: "",
-      body: "",
-      createdAt: t,
-      updatedAt: t,
-      ...(caseIdForNewNote ? { caseId: caseIdForNewNote } : {}),
-    };
-    setNotes((prev) => {
-      const next = [note, ...prev];
-      persistSoon(next);
-      return next;
+  React.useEffect(() => {
+    mutateData((prev) => {
+      if (prev.notebooks.some((n) => n.caseId === caseKey)) return prev;
+      return { notebooks: [...prev.notebooks, { caseId: caseKey, sections: [makeDefaultSection()] }] };
     });
-    setActiveNoteId(note.id);
-  }, [caseIdForNewNote, persistSoon]);
+  }, [caseKey, mutateData]);
 
-  const insertEvidenceReference = React.useCallback(() => {
-    if (!route.evidenceLinkPath) return;
-    const line = evidenceLinkMarkdown(route.evidenceLinkPath);
-    const cid = route.caseId && noteScope === "case" ? route.caseId : undefined;
+  const activatePage = React.useCallback(
+    (pageId: string) => {
+      for (const s of sections) {
+        if (s.pages.some((p) => p.id === pageId)) {
+          setActiveSectionId(s.id);
+          setActivePageId(pageId);
+          return;
+        }
+      }
+    },
+    [sections],
+  );
 
-    if (visibleNotes.length === 0) {
-      const t = new Date().toISOString();
-      const newNote: WorkspaceNote = {
-        id: crypto.randomUUID(),
-        title: "",
-        body: line.trim(),
-        createdAt: t,
-        updatedAt: t,
-        ...(cid ? { caseId: cid } : {}),
-      };
-      setNotes((prev) => {
-        const next = [newNote, ...prev];
-        persistSoon(next);
-        return next;
+  const patchPage = React.useCallback(
+    (pageId: string, patch: Partial<CaseNotePage>) => {
+      mutateData((prev) => ({
+        notebooks: prev.notebooks.map((nb) =>
+          nb.caseId !== caseKey
+            ? nb
+            : {
+                ...nb,
+                sections: nb.sections.map((s) => ({
+                  ...s,
+                  pages: s.pages.map((p) =>
+                    p.id === pageId ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p,
+                  ),
+                })),
+              },
+        ),
+      }));
+    },
+    [caseKey, mutateData],
+  );
+
+  const addSection = () => {
+    const newSection = makeDefaultSection(`Section ${sections.length + 1}`);
+    const firstPage = makeDefaultPage("Page 1");
+    mutateData((prev) => ({
+      notebooks: prev.notebooks.map((nb) =>
+        nb.caseId === caseKey ? { ...nb, sections: [...nb.sections, { ...newSection, pages: [firstPage] }] } : nb,
+      ),
+    }));
+    setActiveSectionId(newSection.id);
+    setActivePageId(firstPage.id);
+  };
+
+  const addPage = () => {
+    if (!activeSection) return;
+    const newPage = makeDefaultPage(`Page ${pages.length + 1}`);
+    mutateData((prev) => ({
+      notebooks: prev.notebooks.map((nb) =>
+        nb.caseId === caseKey
+          ? {
+              ...nb,
+              sections: nb.sections.map((s) => (s.id === activeSection.id ? { ...s, pages: [newPage, ...s.pages] } : s)),
+            }
+          : nb,
+      ),
+    }));
+    setActivePageId(newPage.id);
+  };
+
+  const applyMarkdownWrap = (before: string, after = before) => {
+    if (!activePage || !textareaRef.current) return;
+    const el = textareaRef.current;
+    const start = el.selectionStart ?? activePage.body.length;
+    const end = el.selectionEnd ?? activePage.body.length;
+    const selected = activePage.body.slice(start, end);
+    const nextBody = `${activePage.body.slice(0, start)}${before}${selected}${after}${activePage.body.slice(end)}`;
+    patchPage(activePage.id, { body: nextBody });
+  };
+
+  const linkFromContext = (kind: "evidence" | "timeline" | "location") => {
+    if (!activePage) return;
+    if (kind === "evidence" && context.selectedEvidenceIds.length > 0) {
+      patchPage(activePage.id, {
+        links: {
+          ...activePage.links,
+          evidenceIds: [...new Set([...activePage.links.evidenceIds, ...context.selectedEvidenceIds])],
+        },
       });
-      setActiveNoteId(newNote.id);
       return;
     }
-
-    const targetId = activeNoteId ?? visibleNotes[0].id;
-    setNotes((prev) => {
-      const next = prev.map((n) => {
-        if (n.id !== targetId) return n;
-        return {
-          ...n,
-          body: n.body + line,
-          updatedAt: new Date().toISOString(),
-        };
+    if (kind === "timeline" && context.activeTimelineEventId) {
+      patchPage(activePage.id, {
+        links: {
+          ...activePage.links,
+          timelineEventIds: [...new Set([...activePage.links.timelineEventIds, context.activeTimelineEventId])],
+        },
       });
-      persistSoon(next);
-      return next;
-    });
-  }, [
-    activeNoteId,
-    noteScope,
-    persistSoon,
-    route.caseId,
-    route.evidenceLinkPath,
-    visibleNotes,
-  ]);
-
-  const removeNote = React.useCallback(
-    (id: string) => {
-      setNotes((prev) => {
-        const next = prev.filter((n) => n.id !== id);
-        persistSoon(next);
-        return next;
+      return;
+    }
+    if (kind === "location" && context.activeMarkerId) {
+      patchPage(activePage.id, {
+        links: {
+          ...activePage.links,
+          locationIds: [...new Set([...activePage.links.locationIds, context.activeMarkerId])],
+        },
       });
-    },
-    [persistSoon],
-  );
+    }
+  };
 
-  const compact = density === "compact";
-
-  return (
-    <div className={cn("flex min-h-0 flex-col", compact ? "gap-2" : "flex-1 gap-3")}>
-      {route.caseId && (
-        <div
-          className={cn(
-            "flex shrink-0 rounded-md border border-border bg-muted/30 p-0.5 text-[11px]",
-            compact && "[&_button]:py-1 [&_button]:text-[10px]",
-          )}
-          role="group"
-          aria-label="Note scope"
-        >
-          <button
-            type="button"
-            className={cn(
-              "flex-1 rounded px-2 py-1.5 font-medium transition-colors",
-              noteScope === "workspace"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            onClick={() => setNoteScope("workspace")}
-          >
-            Workspace
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "flex-1 rounded px-2 py-1.5 font-medium transition-colors",
-              noteScope === "case"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            onClick={() => setNoteScope("case")}
-          >
-            This investigation
-          </button>
-        </div>
-      )}
-
-      {route.evidenceLinkPath && (
-        <div
-          className={cn(
-            "shrink-0 rounded-lg border border-dashed border-border bg-muted/20 px-2.5",
-            compact ? "py-1.5" : "py-2",
-          )}
-        >
-          <p className={cn("leading-snug text-muted-foreground", compact ? "mb-1 text-[9px]" : "mb-1.5 text-[10px]")}>
-            Open evidence — insert a markdown link into the focused note (or create one).
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className={cn("w-full gap-1.5", compact ? "h-7 text-[10px]" : "h-8 text-xs")}
-            onClick={insertEvidenceReference}
-          >
-            <Link2 className="size-3.5" aria-hidden />
-            Insert evidence link
+  const editor = (
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <div className="flex shrink-0 items-center gap-1">
+        <Button type="button" size="sm" variant="outline" className={cn("px-2 text-[10px]", compact && "h-5 text-[9px]")} onClick={() => applyMarkdownWrap("**")}>
+          <Bold className="mr-1 h-3 w-3" /> Bold
+        </Button>
+        <Button type="button" size="sm" variant="outline" className={cn("px-2 text-[10px]", compact && "h-5 text-[9px]")} onClick={() => applyMarkdownWrap("\n- ", "")}>
+          <List className="mr-1 h-3 w-3" /> List
+        </Button>
+      </div>
+      <Input
+        value={activePage?.title ?? ""}
+        onChange={(e) => activePage && patchPage(activePage.id, { title: e.target.value })}
+        placeholder="Note title"
+        className={cn(compact ? "h-7 text-xs" : "h-8")}
+      />
+      <Textarea
+        ref={textareaRef}
+        value={activePage?.body ?? ""}
+        onChange={(e) => activePage && patchPage(activePage.id, { body: e.target.value })}
+        placeholder="Write your investigation note..."
+        className={cn(
+          "min-h-0 resize-y leading-relaxed text-sm",
+          compact ? "min-h-[100px] max-h-[150px]" : "min-h-[360px]",
+        )}
+      />
+      <div className="shrink-0 rounded border border-border/70 bg-muted/20 p-1.5 text-[10px] text-muted-foreground">
+        <div className="mb-1 flex flex-wrap gap-1">
+          <Button type="button" size="sm" variant="outline" className={cn("px-2 text-[10px]", compact && "h-5 text-[9px]")} onClick={() => linkFromContext("evidence")}>
+            Link evidence
+          </Button>
+          <Button type="button" size="sm" variant="outline" className={cn("px-2 text-[10px]", compact && "h-5 text-[9px]")} onClick={() => linkFromContext("timeline")}>
+            Link timeline
+          </Button>
+          <Button type="button" size="sm" variant="outline" className={cn("px-2 text-[10px]", compact && "h-5 text-[9px]")} onClick={() => linkFromContext("location")}>
+            Link map
           </Button>
         </div>
-      )}
-
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className={cn("w-full shrink-0 justify-center gap-1.5", compact && "h-7 text-[11px]")}
-        onClick={addNote}
-      >
-        <Plus className="size-3.5" aria-hidden />
-        Add note
-      </Button>
-
-      {visibleNotes.length === 0 ? (
-        <EmptyState title="No notes in this scope" className={compact ? "py-3" : "py-6"}>
-          <p className={compact ? "text-[10px] leading-snug" : "text-xs"}>
-            Add a note above, or switch scope if you are on an investigation.
-          </p>
-        </EmptyState>
-      ) : (
-        <ul className={cn("flex flex-col pb-1", compact ? "gap-2" : "gap-3")}>
-          {visibleNotes.map((note) => (
-            <li key={note.id}>
-              <NoteCard
-                note={note}
-                isActive={activeNoteId === note.id}
-                onActivate={() => setActiveNoteId(note.id)}
-                onChangeTitle={(v) => patchNote(note.id, { title: v })}
-                onChangeBody={(v) => patchNote(note.id, { body: v })}
-                onRemove={() => removeNote(note.id)}
-                canDelete={canDelete}
-                compact={compact}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <p
-        className={cn(
-          "shrink-0 leading-snug text-muted-foreground",
-          compact ? "mt-1 text-[9px]" : "mt-auto text-[10px]",
-        )}
-      >
-        Personal notes on this device only — not shared with collaborators by default.
-      </p>
-    </div>
-  );
-}
-
-type NoteCardProps = {
-  note: WorkspaceNote;
-  isActive: boolean;
-  onActivate: () => void;
-  onChangeTitle: (value: string) => void;
-  onChangeBody: (value: string) => void;
-  onRemove: () => void;
-  canDelete: boolean;
-  compact?: boolean;
-};
-
-function NoteCard({
-  note,
-  isActive,
-  onActivate,
-  onChangeTitle,
-  onChangeBody,
-  onRemove,
-  canDelete,
-  compact = false,
-}: NoteCardProps) {
-  const created = formatNoteTimestamp(note.createdAt);
-  const updated = formatNoteTimestamp(note.updatedAt);
-  const showBoth = note.createdAt !== note.updatedAt;
-
-  return (
-    <Card
-      className={cn(
-        "overflow-hidden border-border bg-background shadow-sm transition-shadow",
-        "ring-1 ring-border/60",
-        isActive && "ring-2 ring-ring/40",
-      )}
-    >
-      <div className={cn("space-y-2", compact ? "p-2" : "p-3")}>
-        <div className="flex items-start gap-1.5">
-          <Input
-            value={note.title}
-            onChange={(e) => onChangeTitle(e.target.value)}
-            onFocus={onActivate}
-            placeholder="Title (optional)"
-            className={cn("flex-1 font-medium", compact ? "h-7 text-xs" : "h-8 text-sm")}
-            aria-label="Note title"
-          />
-          {canDelete ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "shrink-0 text-muted-foreground hover:text-destructive",
-                compact ? "h-7 w-7" : "h-8 w-8",
-              )}
-              onClick={onRemove}
-              aria-label="Delete note"
+        <div className="flex flex-wrap gap-1">
+          {(activePage?.links.evidenceIds ?? []).map((id) => (
+            <Link
+              key={id}
+              href={route.caseId ? `/cases/${route.caseId}/evidence/${id}` : `/evidence/${id}`}
+              className="rounded bg-sky-900/40 px-1.5 py-0.5 text-[10px] text-sky-100 underline underline-offset-2"
             >
-              <Trash2 className="size-3.5" aria-hidden />
-            </Button>
-          ) : null}
-        </div>
-
-        <Textarea
-          value={note.body}
-          onChange={(e) => onChangeBody(e.target.value)}
-          onFocus={onActivate}
-          placeholder="Write here…"
-          className={cn("resize-y", compact ? "min-h-[52px] text-xs" : "min-h-[88px] text-sm")}
-          aria-label="Note body"
-          spellCheck
-        />
-
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-x-2 gap-y-0.5 border-t border-border/80 text-muted-foreground",
-            compact ? "pt-1.5 text-[9px]" : "pt-2 text-[10px]",
-          )}
-        >
-          <span title={updated}>Updated {updated}</span>
-          {showBoth && (
-            <>
-              <span className="text-border" aria-hidden>
-                ·
-              </span>
-              <span title={created}>Created {created}</span>
-            </>
-          )}
+              Evidence {id.slice(0, 8)}...
+            </Link>
+          ))}
+          {(activePage?.links.timelineEventIds ?? []).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] text-amber-100 underline underline-offset-2"
+              onClick={() => window.dispatchEvent(new CustomEvent("cia:focus-timeline-event", { detail: { eventId: id } }))}
+            >
+              Timeline {id.slice(0, 8)}...
+            </button>
+          ))}
+          {(activePage?.links.locationIds ?? []).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="rounded bg-emerald-900/40 px-1.5 py-0.5 text-[10px] text-emerald-100 underline underline-offset-2"
+              onClick={() => window.dispatchEvent(new CustomEvent("cia:focus-map-marker", { detail: { markerId: id } }))}
+            >
+              {context.activeMarkerId === id && context.activeLocationLabel ? context.activeLocationLabel : `Location ${id.slice(0, 8)}...`}
+            </button>
+          ))}
         </div>
       </div>
-    </Card>
+    </div>
+  );
+
+  return (
+    <div className={cn("flex min-h-0 flex-1 flex-col gap-1.5", compact && "shrink-0 text-xs")}>
+      <div className="flex shrink-0 items-center justify-between gap-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Notes</p>
+        <Button type="button" size="sm" variant="outline" className="h-6 gap-1 px-2 text-[10px]" onClick={() => setExpanded(true)}>
+          <Expand className="h-3 w-3" /> Expand
+        </Button>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-1">
+        <Button type="button" size="sm" variant="outline" className="h-5 px-1.5 text-[9px]" onClick={addSection}>
+          <Plus className="mr-0.5 h-3 w-3" /> Sec
+        </Button>
+        <Button type="button" size="sm" variant="outline" className="h-5 px-1.5 text-[9px]" onClick={addPage}>
+          <StickyNote className="mr-0.5 h-3 w-3" /> Page
+        </Button>
+        {sections.slice(0, 4).map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={cn(
+              "max-w-[5.5rem] truncate rounded border px-1.5 py-0.5 text-[9px]",
+              activeSection?.id === s.id ? "border-sky-500 bg-sky-500/10 text-sky-100" : "border-border text-muted-foreground",
+            )}
+            title={s.title}
+            onClick={() => setActiveSectionId(s.id)}
+          >
+            {s.title}
+          </button>
+        ))}
+      </div>
+      {recentPages.length > 0 ? (
+        <div className="flex shrink-0 flex-wrap gap-1">
+          {recentPages.slice(0, 4).map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="max-w-[6rem] truncate rounded border border-border/70 bg-muted/20 px-1.5 py-0.5 text-[9px] text-muted-foreground"
+              title={p.title || "Untitled"}
+              onClick={() => activatePage(p.id)}
+            >
+              {p.title || "Untitled"}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {editor}
+
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="max-h-[92vh] max-w-[min(96vw,1300px)] overflow-hidden border-slate-500/70 bg-slate-950 p-0 text-slate-100">
+          <DialogHeader className="border-b border-slate-700 px-4 py-3">
+            <DialogTitle className="text-sm">Case Notes Workspace</DialogTitle>
+          </DialogHeader>
+          <div className="grid h-[84vh] grid-cols-12">
+            <aside className="col-span-3 border-r border-slate-700 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={addSection}>
+                  + Section
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={addPage}>
+                  + Page
+                </Button>
+              </div>
+              <div className="space-y-2 overflow-y-auto pr-1">
+                {sections.map((s) => (
+                  <div key={s.id} className="rounded border border-slate-700 p-2">
+                    <Input
+                      value={s.title}
+                      onChange={(e) =>
+                        mutateData((prev) => ({
+                          notebooks: prev.notebooks.map((nb) =>
+                            nb.caseId === caseKey
+                              ? {
+                                  ...nb,
+                                  sections: nb.sections.map((sec) =>
+                                    sec.id === s.id ? { ...sec, title: e.target.value } : sec,
+                                  ),
+                                }
+                              : nb,
+                          ),
+                        }))
+                      }
+                      className="h-7 bg-slate-900 text-xs"
+                    />
+                    <div className="mt-2 space-y-1">
+                      {s.pages.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => activatePage(p.id)}
+                          className={cn(
+                            "block w-full truncate rounded border px-2 py-1 text-left text-xs",
+                            activePage?.id === p.id
+                              ? "border-sky-500 bg-sky-500/10 text-sky-100"
+                              : "border-slate-700 text-slate-300",
+                          )}
+                        >
+                          {p.title || "Untitled"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </aside>
+            <div className="col-span-9 p-3">{editor}</div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

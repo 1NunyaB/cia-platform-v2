@@ -1,6 +1,7 @@
 import { ingestUploadedFile } from "@/services/case-evidence-ingest";
 import { buildDuplicateEvidenceResponse } from "@/services/duplicate-evidence-response";
 import { EvidenceDuplicateError, isClientSafeUploadError } from "@/lib/evidence-upload-errors";
+import { parseImageCategoryFromForm } from "@/lib/image-categories";
 import { parseEvidenceSourceFromFormData } from "@/lib/evidence-source";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 import { requestClientIp, requestUserAgent } from "@/lib/request-audit";
@@ -35,6 +36,12 @@ export async function POST(
   const user = { id: actor.userId };
 
   const formData = await request.formData();
+  let imageCategory: string | null = null;
+  try {
+    imageCategory = parseImageCategoryFromForm(formData);
+  } catch {
+    return NextResponse.json({ error: "Invalid image_category" }, { status: 400 });
+  }
   const source = parseEvidenceSourceFromFormData(formData);
   const requestedForceDuplicate =
     formData.get("force_duplicate") === "true" || formData.get("force_duplicate") === "1";
@@ -55,6 +62,7 @@ export async function POST(
           file,
           source,
           forceDuplicate,
+          imageCategory,
           audit: { uploaderIp, userAgent, uploadMethod: "bulk" },
         });
         await logUsageEvent({
@@ -95,6 +103,7 @@ export async function POST(
         file: single,
         source,
         forceDuplicate,
+        imageCategory,
         audit: { uploaderIp, userAgent, uploadMethod: "single_file" },
       });
       await logUsageEvent({

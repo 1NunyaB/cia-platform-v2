@@ -13,6 +13,13 @@ import { parseEvidenceSourceFromFormData } from "@/lib/evidence-source";
 import type { DuplicateEvidenceMatch } from "@/lib/evidence-upload-errors";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 import { InvestigationLoadingIndicator } from "@/components/investigation-loading-indicator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function existingEvidenceHref(e: DuplicateEvidenceMatch) {
   if (e.case_id) return `/cases/${e.case_id}/evidence/${e.id}`;
@@ -133,6 +140,7 @@ function EvidenceBroadcastUploadHint() {
 type IntakeProps = {
   mode: "case" | "library";
   caseId?: string;
+  casesForAssign?: { id: string; title: string }[];
 };
 
 export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
@@ -561,7 +569,7 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
   );
 }
 
-export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
+export function EvidenceIntakeUrlForm({ mode, caseId, casesForAssign = [] }: IntakeProps) {
   const router = useRouter();
   const [attachToCurrentCase, setAttachToCurrentCase] = useState(true);
   const { apiFromUrl } = useIntakeApi(mode, caseId, attachToCurrentCase);
@@ -569,6 +577,7 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
   const [urlInfo, setUrlInfo] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlRows, setUrlRows] = useState<string[]>(["", "", "", "", ""]);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>(casesForAssign[0]?.id ?? "");
   const [scrubPageUrl, setScrubPageUrl] = useState("");
   const [scrubLoading, setScrubLoading] = useState(false);
   const [scrubError, setScrubError] = useState<string | null>(null);
@@ -599,6 +608,10 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
       setUrlError("Add at least one link to import.");
       return;
     }
+    if (mode === "library" && !selectedCaseId) {
+      setUrlError("Import failed — no case selected. Please select or create a case before importing.");
+      return;
+    }
     const source = parseEvidenceSourceFromFormData(fd);
     setUrlLoading(true);
     const res = await fetch(apiFromUrl, {
@@ -606,6 +619,7 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         urls,
+        ...(mode === "library" ? { case_id: selectedCaseId } : {}),
         source_type: source.source_type,
         source_platform: source.source_platform,
         source_program: source.source_program,
@@ -681,8 +695,9 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
   return (
     <div className="space-y-6">
       <p className="text-sm text-zinc-700">
-        Add one or more public <strong className="font-semibold text-foreground">https://</strong> links. Each link is
-        imported independently so one failure will not block the rest.
+        Add one or more public links (e.g. <strong className="font-semibold text-foreground">wikipedia.org/page</strong>{" "}
+        or full URLs). If protocol is missing, <strong className="font-semibold text-foreground">https://</strong> is
+        applied automatically. Each link is imported independently so one failure will not block the rest.
       </p>
 
       <EvidenceBroadcastUploadHint />
@@ -694,6 +709,26 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
             attachToCurrentCase={attachToCurrentCase}
             onAttachChange={setAttachToCurrentCase}
           />
+        ) : null}
+        {mode === "library" ? (
+          <div className="space-y-2 rounded-lg border border-border bg-card p-4">
+            <Label className="text-foreground">Import into case</Label>
+            <Select value={selectedCaseId} onValueChange={setSelectedCaseId}>
+              <SelectTrigger className="border-input bg-form-field text-form-field-foreground">
+                <SelectValue placeholder="Select case…" />
+              </SelectTrigger>
+              <SelectContent>
+                {casesForAssign.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Evidence will be imported into this case so activity logging and case context stay consistent.
+            </p>
+          </div>
         ) : null}
         {urlInfo ? (
           <Alert className={successAlertClass}>
@@ -722,10 +757,10 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
             {urlRows.map((value, idx) => (
               <Input
                 key={`url-row-${idx}`}
-                type="url"
+                type="text"
                 inputMode="url"
                 autoComplete="url"
-                placeholder="https://example.com/report or direct .pdf link"
+                placeholder="example.com/report or https://example.com/report"
                 value={value}
                 onChange={(ev) =>
                   setUrlRows((prev) => prev.map((row, rowIdx) => (rowIdx === idx ? ev.target.value : row)))
@@ -743,10 +778,10 @@ export function EvidenceIntakeUrlForm({ mode, caseId }: IntakeProps) {
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               id="source-page-link-collector"
-              type="url"
+              type="text"
               value={scrubPageUrl}
               onChange={(ev) => setScrubPageUrl(ev.target.value)}
-              placeholder="https://example.com/source-page"
+              placeholder="example.com/source-page"
               className="border-input bg-form-field text-form-field-foreground placeholder:text-form-field-placeholder"
             />
             <Button

@@ -9,14 +9,24 @@ import { cn } from "@/lib/utils";
 
 const STORAGE_COLLAPSED = "cia.workspace.rightPanel.collapsed";
 const STORAGE_WIDTH = "cia.workspace.rightPanel.widthPx";
+const STORAGE_NOTES_HEIGHT = "cia.workspace.rightPanel.notesHeightPx";
+const STORAGE_AI_HEIGHT = "cia.workspace.rightPanel.aiHeightPx";
 
-/** Default ~304px — within 280–340px target; main keeps ~60%+ when root max-width is ~1400px. */
-const DEFAULT_PANEL_WIDTH = 304;
+/** Narrower default so the command center column stays primary. */
+const DEFAULT_PANEL_WIDTH = 276;
 const COLLAPSED_WIDTH_PX = 52;
-const MIN_PANEL = 240;
-const MAX_PANEL = 420;
+const MIN_PANEL = 248;
+const MAX_PANEL = 360;
 /** Do not let the panel exceed this fraction of the viewport width. */
-const MAX_VIEWPORT_FRACTION = 0.38;
+const MAX_VIEWPORT_FRACTION = 0.34;
+const DEFAULT_NOTES_HEIGHT = 140;
+const MIN_NOTES_HEIGHT = 100;
+const MAX_NOTES_HEIGHT = 260;
+const MIN_CHAT_HEIGHT = 180;
+const DEFAULT_AI_HEIGHT = 260;
+const MIN_AI_HEIGHT = 140;
+const MAX_AI_HEIGHT = 520;
+const MIN_NOTES_CHAT_HEIGHT = 220;
 
 function clampPanelWidth(px: number, viewportWidth: number): number {
   const maxByViewport = Math.min(MAX_PANEL, Math.floor(viewportWidth * MAX_VIEWPORT_FRACTION));
@@ -25,6 +35,18 @@ function clampPanelWidth(px: number, viewportWidth: number): number {
     return Math.min(minAllowed, Math.max(200, maxByViewport));
   }
   return Math.max(minAllowed, Math.min(maxByViewport, Math.round(px)));
+}
+
+function clampNotesHeight(px: number, availableHeight: number): number {
+  const maxByAvailable = Math.max(MIN_NOTES_HEIGHT, availableHeight - MIN_CHAT_HEIGHT);
+  const maxAllowed = Math.min(MAX_NOTES_HEIGHT, maxByAvailable);
+  return Math.max(MIN_NOTES_HEIGHT, Math.min(maxAllowed, Math.round(px)));
+}
+
+function clampAiHeight(px: number, availableHeight: number): number {
+  const maxByAvailable = Math.max(MIN_AI_HEIGHT, availableHeight - MIN_NOTES_CHAT_HEIGHT);
+  const maxAllowed = Math.min(MAX_AI_HEIGHT, maxByAvailable);
+  return Math.max(MIN_AI_HEIGHT, Math.min(maxAllowed, Math.round(px)));
 }
 
 type WorkspaceShellWithPanelProps = {
@@ -46,10 +68,21 @@ export function WorkspaceShellWithPanel({
   chatSlot = null,
 }: WorkspaceShellWithPanelProps) {
   const [collapsed, setCollapsed] = React.useState(false);
+  const [chatCollapsed, setChatCollapsed] = React.useState(false);
   const [panelWidthPx, setPanelWidthPx] = React.useState(DEFAULT_PANEL_WIDTH);
   const [dragging, setDragging] = React.useState(false);
+  const [notesHeightPx, setNotesHeightPx] = React.useState(DEFAULT_NOTES_HEIGHT);
+  const [notesDragging, setNotesDragging] = React.useState(false);
+  const [aiHeightPx, setAiHeightPx] = React.useState(DEFAULT_AI_HEIGHT);
   const dragStartXRef = React.useRef(0);
   const dragStartWidthRef = React.useRef(DEFAULT_PANEL_WIDTH);
+  const notesStartYRef = React.useRef(0);
+  const notesStartHeightRef = React.useRef(DEFAULT_NOTES_HEIGHT);
+  const aiDraggingRef = React.useRef(false);
+  const aiStartYRef = React.useRef(0);
+  const aiStartHeightRef = React.useRef(DEFAULT_AI_HEIGHT);
+  const rightBodyRef = React.useRef<HTMLDivElement | null>(null);
+  const notesAreaRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     try {
       const c = localStorage.getItem(STORAGE_COLLAPSED);
@@ -58,7 +91,23 @@ export function WorkspaceShellWithPanel({
       if (w != null) {
         const parsed = Number.parseInt(w, 10);
         if (!Number.isNaN(parsed)) {
-          setPanelWidthPx(clampPanelWidth(parsed, typeof window !== "undefined" ? window.innerWidth : 1200));
+          setPanelWidthPx(clampPanelWidth(parsed, window.innerWidth));
+        }
+      }
+      const nh = localStorage.getItem(STORAGE_NOTES_HEIGHT);
+      if (nh != null) {
+        const parsed = Number.parseInt(nh, 10);
+        if (!Number.isNaN(parsed)) {
+          const available = notesAreaRef.current?.clientHeight ?? 520;
+          setNotesHeightPx(clampNotesHeight(parsed, available));
+        }
+      }
+      const ah = localStorage.getItem(STORAGE_AI_HEIGHT);
+      if (ah != null) {
+        const parsed = Number.parseInt(ah, 10);
+        if (!Number.isNaN(parsed)) {
+          const available = rightBodyRef.current?.clientHeight ?? 640;
+          setAiHeightPx(clampAiHeight(parsed, available));
         }
       }
     } catch {
@@ -69,6 +118,22 @@ export function WorkspaceShellWithPanel({
   const persistWidth = React.useCallback((w: number) => {
     try {
       localStorage.setItem(STORAGE_WIDTH, String(w));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistNotesHeight = React.useCallback((h: number) => {
+    try {
+      localStorage.setItem(STORAGE_NOTES_HEIGHT, String(h));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistAiHeight = React.useCallback((h: number) => {
+    try {
+      localStorage.setItem(STORAGE_AI_HEIGHT, String(h));
     } catch {
       /* ignore */
     }
@@ -121,6 +186,71 @@ export function WorkspaceShellWithPanel({
     };
   }, [dragging, persistWidth]);
 
+  React.useEffect(() => {
+    if (!notesDragging) return;
+    const onMove = (e: PointerEvent) => {
+      const delta = e.clientY - notesStartYRef.current;
+      const available = notesAreaRef.current?.clientHeight ?? 520;
+      const next = clampNotesHeight(notesStartHeightRef.current + delta, available);
+      setNotesHeightPx(next);
+    };
+    const onUp = () => {
+      setNotesDragging(false);
+      setNotesHeightPx((h) => {
+        const available = notesAreaRef.current?.clientHeight ?? 520;
+        const clamped = clampNotesHeight(h, available);
+        persistNotesHeight(clamped);
+        return clamped;
+      });
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+  }, [notesDragging, persistNotesHeight]);
+
+  React.useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!aiDraggingRef.current) return;
+      const delta = e.clientY - aiStartYRef.current;
+      const available = rightBodyRef.current?.clientHeight ?? 640;
+      const next = clampAiHeight(aiStartHeightRef.current + delta, available);
+      setAiHeightPx(next);
+    };
+    const onUp = () => {
+      if (!aiDraggingRef.current) return;
+      aiDraggingRef.current = false;
+      setAiHeightPx((h) => {
+        const available = rightBodyRef.current?.clientHeight ?? 640;
+        const clamped = clampAiHeight(h, available);
+        persistAiHeight(clamped);
+        return clamped;
+      });
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+    };
+  }, [persistAiHeight]);
+
   const onResizePointerDown = React.useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (collapsed) return;
@@ -133,9 +263,31 @@ export function WorkspaceShellWithPanel({
     [collapsed, panelWidthPx],
   );
 
+  const onNotesResizePointerDown = React.useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    notesStartYRef.current = e.clientY;
+    notesStartHeightRef.current = notesHeightPx;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setNotesDragging(true);
+  }, [notesHeightPx]);
+
+  const onAiResizePointerDown = React.useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    aiDraggingRef.current = true;
+    aiStartYRef.current = e.clientY;
+    aiStartHeightRef.current = aiHeightPx;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [aiHeightPx]);
+
   React.useEffect(() => {
     const onResize = () => {
       setPanelWidthPx((w) => clampPanelWidth(w, window.innerWidth));
+      setAiHeightPx((h) => {
+        const available = rightBodyRef.current?.clientHeight ?? 640;
+        return clampAiHeight(h, available);
+      });
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -145,7 +297,7 @@ export function WorkspaceShellWithPanel({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-x-auto">
-      <div className="min-h-0 min-w-0 max-w-full flex-1 basis-0 py-8">{children}</div>
+      <div className="min-h-0 min-w-0 max-w-full flex-1 basis-0 py-5">{children}</div>
 
       {!collapsed ? (
         <div
@@ -163,10 +315,7 @@ export function WorkspaceShellWithPanel({
       ) : null}
 
       <aside
-        className={cn(
-          "flex min-h-0 shrink-0 flex-col border-l border-border bg-card shadow-sm",
-          !dragging && "transition-[width] duration-200 ease-out",
-        )}
+        className="flex min-h-0 shrink-0 flex-col border-l border-border bg-card shadow-sm transition-[width] duration-200 ease-out"
         style={{ width: asideWidth }}
         aria-label="Workspace AI, notes, and chat panel"
         data-state={collapsed ? "collapsed" : "expanded"}
@@ -179,7 +328,7 @@ export function WorkspaceShellWithPanel({
         >
           {!collapsed && (
             <span className="min-w-0 flex-1 truncate pl-1 text-xs font-medium text-foreground">
-              AI · notes{chatSlot ? " · chat" : ""}
+              AI · case notes{chatSlot ? " · chat" : ""}
             </span>
           )}
           <Button
@@ -199,26 +348,58 @@ export function WorkspaceShellWithPanel({
         </div>
 
         {!collapsed && (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
-            <div className="flex min-h-[28vh] flex-1 flex-col overflow-hidden">
+          <div ref={rightBodyRef} className="flex h-full min-h-0 flex-1 flex-col overflow-hidden p-2.5">
+            <div
+              className="flex min-h-0 shrink-0 flex-col overflow-y-auto overflow-x-hidden"
+              style={{ height: aiHeightPx }}
+            >
               <WorkspaceEvidenceAiPanel />
             </div>
-            <div className="mt-3 flex max-h-[min(9vh,68px)] min-h-0 shrink-0 flex-col overflow-hidden border-t border-border pt-3">
-              <p className="mb-1 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Notes
-              </p>
-              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-0.5">
-                <WorkspaceNotesPanel ownerKey={notesOwnerKey} canDelete={canDelete} density="compact" />
-              </div>
-            </div>
-            {chatSlot ? (
-              <div className="mt-3 flex min-h-0 min-h-[10rem] flex-1 flex-col overflow-hidden border-t border-border pt-3">
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize AI panel"
+              onPointerDown={onAiResizePointerDown}
+              className="h-2 shrink-0 cursor-row-resize border-y border-border/60 bg-border/30"
+            />
+            <div ref={notesAreaRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex flex-shrink-0 flex-col overflow-hidden py-2.5" style={{ height: notesHeightPx }}>
                 <p className="mb-1 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Workplace chat
+                  Case notes
                 </p>
-                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-0.5">{chatSlot}</div>
+                <div className="flex min-h-0 flex-shrink-0 flex-1 flex-col overflow-hidden pr-0.5">
+                  <WorkspaceNotesPanel ownerKey={notesOwnerKey} canDelete={canDelete} density="compact" />
+                </div>
               </div>
-            ) : null}
+              {chatSlot ? (
+                <>
+                  <div
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Resize notes and chat"
+                    onPointerDown={onNotesResizePointerDown}
+                    className="h-2 shrink-0 cursor-row-resize border-y border-border/60 bg-border/30"
+                  />
+                  <div className="flex flex-1 min-h-0 flex-col overflow-hidden border-t border-border/80 pt-2.5">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Workspace chat
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-[10px]"
+                        onClick={() => setChatCollapsed((v) => !v)}
+                      >
+                        {chatCollapsed ? "Show" : "Hide"}
+                      </Button>
+                    </div>
+                    {!chatCollapsed ? <div className="flex-1 min-h-0 overflow-hidden">{chatSlot}</div> : null}
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         )}
       </aside>

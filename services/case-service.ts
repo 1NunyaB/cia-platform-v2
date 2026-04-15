@@ -175,7 +175,7 @@ export async function getCaseById(supabase: AppSupabaseClient, caseId: string) {
 export async function getCaseMembers(supabase: AppSupabaseClient, caseId: string) {
   const { data: members, error } = await supabase
     .from("case_members")
-    .select("id, user_id, role, created_at")
+    .select("id, user_id, role, created_at, investigator_presence, presence_updated_at")
     .eq("case_id", caseId);
   if (error) throw new Error(error.message);
   const userIds = [...new Set((members ?? []).map((m) => m.user_id as string))];

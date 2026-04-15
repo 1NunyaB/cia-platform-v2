@@ -167,10 +167,10 @@ export function DashboardChat({
         <div className="min-w-0">
           <CardTitle className={cn("text-foreground", sidebar ? "text-sm" : "text-base")}>Workspace chat</CardTitle>
           <CardDescription
-            className={cn("text-muted-foreground leading-relaxed", sidebar ? "text-[10px] line-clamp-3" : "text-xs")}
+            className={cn("text-muted-foreground leading-relaxed", sidebar ? "text-[10px] line-clamp-2" : "text-xs")}
           >
             {sidebar ? (
-              <>Signed-in workspace thread — not case notes.</>
+              <>Team thread (separate from case notes).</>
             ) : (
               <>
                 Saved for all signed-in members — not case notes. Search matches message text. Automated checks reduce

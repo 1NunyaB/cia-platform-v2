@@ -180,9 +180,111 @@
   height: 2px;
 }
 
+.cis-radar-sweep {
+  background: conic-gradient(from 0deg, transparent 0deg 300deg, rgb(250 204 21 / 0.25) 330deg, transparent 360deg);
+  animation: cisRadarSweep 7s linear infinite;
+  border-radius: 9999px;
+  mask: radial-gradient(circle at center, transparent 0 44%, black 47% 100%);
+}
+
+@keyframes cisRadarSweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cisRouteGlow {
+  0%,
+  100% {
+    opacity: 0.45;
+    filter: drop-shadow(0 0 3px rgb(250 204 21 / 0.2));
+  }
+  50% {
+    opacity: 0.8;
+    filter: drop-shadow(0 0 8px rgb(250 204 21 / 0.42));
+  }
+}
+
+@keyframes cisMapLensPulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.82;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+@keyframes cisPlaneTravel {
+  0% {
+    offset-distance: 0%;
+    opacity: 0.9;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0.9;
+  }
+}
+
+.cis-route-glow {
+  animation: cisRouteGlow 5.6s ease-in-out infinite;
+}
+
+.cis-map-lens-pulse {
+  animation: cisMapLensPulse 4.8s ease-in-out infinite;
+}
+
+.cis-plane-travel {
+  offset-path: path("M52 214 C122 198, 178 178, 224 144 C262 116, 300 90, 344 76");
+  offset-rotate: auto;
+  animation: cisPlaneTravel 16s linear infinite;
+}
+
+.cis-pulse-soft {
+  animation: cisPulseSoft 2.2s ease-in-out infinite;
+}
+
+@keyframes cisPulseSoft {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+.cis-notification-alert-flash {
+  animation: cisNotificationAlertFlash 1.05s ease-in-out infinite;
+}
+
+@keyframes cisNotificationAlertFlash {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.45);
+  }
+  50% {
+    opacity: 0.68;
+    transform: scale(1.08);
+    box-shadow: 0 0 0 7px rgb(239 68 68 / 0.06);
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
   }
   body {
     @apply min-h-screen bg-background text-foreground antialiased;

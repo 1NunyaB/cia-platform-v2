@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
 
@@ -50,7 +50,8 @@ export async function POST(request: Request) {
 
   const buf = Buffer.from(await file.arrayBuffer());
   const ext = extForMime(file.type);
-  const path = `${user.id}/${randomUUID()}.${ext}`;
+  /** `avatars` bucket: `investigators/avatars/<user-id>/<timestamp>-avatar.<ext>` (see migration 051). */
+  const path = `investigators/avatars/${user.id}/${Date.now()}-avatar.${ext}`;
 
   const { data: existing } = await supabase
     .from("profiles")
@@ -70,13 +71,28 @@ export async function POST(request: Request) {
   const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
   const publicUrl = pub.publicUrl;
 
-  const { error: dbErr } = await supabase
-    .from("profiles")
-    .update({ investigator_avatar_url: publicUrl })
-    .eq("id", user.id);
-  if (dbErr) {
-    await supabase.storage.from("avatars").remove([path]);
-    return NextResponse.json({ error: dbErr.message }, { status: 500 });
+  const now = new Date().toISOString();
+  if (!existing) {
+    const emailLocal = user.email?.split("@")[0]?.trim();
+    const { error: dbErr } = await supabase.from("profiles").insert({
+      id: user.id,
+      display_name: emailLocal || null,
+      investigator_avatar_url: publicUrl,
+      updated_at: now,
+    });
+    if (dbErr) {
+      await supabase.storage.from("avatars").remove([path]);
+      return NextResponse.json({ error: dbErr.message }, { status: 500 });
+    }
+  } else {
+    const { error: dbErr } = await supabase
+      .from("profiles")
+      .update({ investigator_avatar_url: publicUrl, updated_at: now })
+      .eq("id", user.id);
+    if (dbErr) {
+      await supabase.storage.from("avatars").remove([path]);
+      return NextResponse.json({ error: dbErr.message }, { status: 500 });
+    }
   }
 
   if (prevUrl && prevUrl.includes("/avatars/")) {
@@ -93,5 +109,6 @@ export async function POST(request: Request) {
     }
   }
 
+  revalidatePath("/investigators");
   return NextResponse.json({ ok: true, investigator_avatar_url: publicUrl });
 }

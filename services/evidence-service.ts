@@ -3,6 +3,7 @@ import type {
   EvidenceUploadMethod,
   ExtractedText,
   ExtractionMethod,
+  LocationMapPinRow,
 } from "@/types";
 import type { EvidenceSourcePayload } from "@/lib/evidence-source";
 import type { DuplicateEvidenceMatch } from "@/lib/evidence-upload-errors";
@@ -25,17 +26,25 @@ export function isEvidenceCaseMembershipTableError(err: { message?: string } | n
  * Storage layout: case uploads use `{caseId}/{evidenceId}/{file}`.
  * Library (no case) uses `library/{userId}/{evidenceId}/{file}` so objects stay addressable before assignment.
  */
+/**
+ * Evidence bucket paths. Optional `imageCategory` nests under `images/{category}/` (see migration 049).
+ * Example library: `images/location/library/{userId}/{evidenceId}/file.jpg`
+ * Example case: `images/location/{caseId}/{evidenceId}/file.jpg`
+ */
 export function buildStoragePath(
   caseId: string | null,
   userId: string,
   evidenceId: string,
   filename: string,
+  imageCategory?: string | null,
 ) {
   const safe = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const prefix =
+    imageCategory && /^[a-z_]+$/.test(imageCategory) ? `images/${imageCategory}/` : "";
   if (caseId) {
-    return `${caseId}/${evidenceId}/${safe}`;
+    return `${prefix}${caseId}/${evidenceId}/${safe}`;
   }
-  return `library/${userId}/${evidenceId}/${safe}`;
+  return `${prefix}library/${userId}/${evidenceId}/${safe}`;
 }
 
 /** Guest library objects: isolated under session id (service-role uploads). */
@@ -542,6 +551,8 @@ export async function registerEvidenceFile(
     derivativeSourcePage?: number | null;
     /** Override heuristic kind (defaults from MIME + filename). */
     suggestedEvidenceKind?: EvidenceKind | null;
+    /** Image analysis hub folder; must match `image_categories.name` when set. */
+    imageCategory?: string | null;
   },
 ) {
   const src = input.source;
@@ -614,6 +625,7 @@ export async function registerEvidenceFile(
               : {}),
           }
         : {}),
+      ...(input.imageCategory ? { image_category: input.imageCategory } : {}),
     })
     .select("id")
     .single();
@@ -815,6 +827,76 @@ export async function listEvidenceVisible(supabase: AppSupabaseClient) {
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+function isImageEvidenceRow(r: { mime_type?: string | null; suggested_evidence_kind?: string | null }): boolean {
+  const mime = (r.mime_type ?? "").toLowerCase();
+  const kind = (r.suggested_evidence_kind ?? "").toLowerCase();
+  return mime.startsWith("image/") || kind === "image";
+}
+
+/**
+ * Image Analysis hub: image rows only, optionally filtered by `image_category`.
+ */
+export async function listEvidenceForImageHub(
+  supabase: AppSupabaseClient,
+  opts: { imageCategory?: string | null },
+) {
+  let q = supabase.from("evidence_files").select("*").order("created_at", { ascending: false });
+  if (opts.imageCategory) {
+    q = q.eq("image_category", opts.imageCategory);
+  }
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []).filter(isImageEvidenceRow);
+  return rows;
+}
+
+/**
+ * Location map: evidence in the `location` image category with stored WGS84 coordinates.
+ * RLS limits rows to what the caller can read.
+ */
+export async function listLocationMapPinsForUser(supabase: AppSupabaseClient): Promise<LocationMapPinRow[]> {
+  const { data, error } = await supabase
+    .from("evidence_files")
+    .select("id, display_filename, original_filename, short_alias, case_id, latitude, longitude")
+    .eq("image_category", "location")
+    .not("latitude", "is", null)
+    .not("longitude", "is", null);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  const valid = rows.filter((r) => {
+    const lat = Number(r.latitude);
+    const lon = Number(r.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+  });
+  const caseIds = [...new Set(valid.map((r) => r.case_id).filter(Boolean))] as string[];
+  const caseTitles = new Map<string, string>();
+  if (caseIds.length > 0) {
+    const { data: caseRows, error: caseErr } = await supabase.from("cases").select("id, title").in("id", caseIds);
+    if (caseErr) throw new Error(caseErr.message);
+    for (const c of caseRows ?? []) {
+      caseTitles.set(c.id as string, String((c.title as string | null) ?? "").trim() || "Untitled");
+    }
+  }
+  return valid.map((r) => {
+    const cid = (r.case_id as string | null) ?? null;
+    const title =
+      String((r.display_filename as string | null)?.trim() || "") ||
+      String((r.original_filename as string | null)?.trim() || "") ||
+      "Evidence";
+    const href = cid ? `/cases/${cid}/evidence/${r.id as string}` : `/evidence/${r.id as string}`;
+    return {
+      id: r.id as string,
+      href,
+      title,
+      shortAlias: (r.short_alias as string | null)?.trim() || null,
+      caseTitle: cid ? caseTitles.get(cid) ?? null : null,
+      caseId: cid,
+      latitude: Number(r.latitude),
+      longitude: Number(r.longitude),
+    };
+  });
 }
 
 /** Membership counts for marker UI (multi-case). */

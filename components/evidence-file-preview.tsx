@@ -116,6 +116,8 @@ export function EvidenceFilePreview({
   const [payload, setPayload] = useState<FileUrlPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [textPreview, setTextPreview] = useState<string | null>(null);
+  const [textPreviewError, setTextPreviewError] = useState<string | null>(null);
 
   const bumpZoom = useCallback((delta: number) => {
     setZoom((z) => {
@@ -163,6 +165,35 @@ export function EvidenceFilePreview({
   );
 
   const streamSrc = payload ? payload.streamUrl ?? `/api/evidence/${evidenceId}/file` : null;
+  const isTextLike =
+    !!payload?.mimeType &&
+    (payload.mimeType.startsWith("text/") ||
+      payload.mimeType.includes("json") ||
+      payload.mimeType.includes("xml") ||
+      payload.mimeType.includes("csv"));
+
+  useEffect(() => {
+    let cancelled = false;
+    setTextPreview(null);
+    setTextPreviewError(null);
+    if (!streamSrc || !isTextLike) return;
+    (async () => {
+      try {
+        const res = await fetch(streamSrc, { credentials: "include" });
+        if (!res.ok) {
+          if (!cancelled) setTextPreviewError("Could not load extracted content preview.");
+          return;
+        }
+        const text = await res.text();
+        if (!cancelled) setTextPreview(text.trim() ? text : "No readable text content was found.");
+      } catch {
+        if (!cancelled) setTextPreviewError("Could not load extracted content preview.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [streamSrc, isTextLike]);
 
   const zoomWrap = (inner: React.ReactNode) => (
     <div id="evidence-file-preview" className="scroll-mt-4 space-y-0">
@@ -284,10 +315,29 @@ export function EvidenceFilePreview({
     );
   }
 
+  if (isTextLike) {
+    return (
+      <div id="evidence-file-preview" className="scroll-mt-4 space-y-2">
+        <ProtectedEvidenceView viewerLabel={payload.viewerLabel} className="rounded-lg border border-document-border bg-document p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground">Displaying extracted content</p>
+          <div className="max-h-[min(68vh,760px)] overflow-auto rounded border border-border bg-white/90 p-3">
+            {textPreviewError ? (
+              <p className="text-sm text-destructive">{textPreviewError}</p>
+            ) : textPreview == null ? (
+              <p className="text-sm text-muted-foreground">Loading extracted content…</p>
+            ) : (
+              <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed text-foreground">{textPreview}</pre>
+            )}
+          </div>
+        </ProtectedEvidenceView>
+      </div>
+    );
+  }
+
   return (
     <PreviewOpenFallback
       openHref={streamSrc}
-      detail={`This format (${payload.mimeType ?? "unknown"}) is not shown inline. The file is still stored.`}
+      detail={`Displaying extracted content is not available for this format (${payload.mimeType ?? "unknown"}). The file is still stored.`}
       title="Preview unavailable. Click to open file."
     />
   );

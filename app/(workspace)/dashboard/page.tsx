@@ -1,24 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import {
-  getEvidenceCaseMembershipCounts,
-  getEvidenceContentDuplicatePeerFlags,
-  getEvidenceHasAiAnalysisMap,
-  getEvidenceViewedSet,
-  isEvidenceCaseMembershipTableError,
-  listEvidenceVisible,
-} from "@/services/evidence-service";
-import { DashboardMainPanels } from "@/components/dashboard-main-panels";
+import { DashboardCommandHub } from "@/components/dashboard-command-hub";
 import { Button } from "@/components/ui/button";
 import { getGuestSessionIdFromCookies } from "@/lib/guest-session";
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ caseId?: string }>;
-}) {
+export default async function DashboardPage() {
   const supabase = await createClient();
-  const { caseId } = await searchParams;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -30,150 +17,50 @@ export default async function DashboardPage({
 
   if (!user && guestId) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            You’re browsing as a guest. Open the evidence library to upload and review files, or sign in for cases and
+      <div className="mx-auto w-full max-w-3xl px-2 py-4 sm:px-0">
+        <div className="rounded-xl border border-sky-400/20 bg-gradient-to-br from-[#1a2332] via-[#151c28] to-[#0f141d] p-5 shadow-[0_0_32px_-14px_rgba(56,189,248,0.18)]">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-50">Command Center</h1>
+          <p className="mt-2 text-sm leading-relaxed text-slate-400">
+            You’re browsing as a guest. Use the evidence library to upload and review files, or sign in for cases and
             saved progress.
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              asChild
+              size="sm"
+              className="h-8 border-sky-400/40 bg-sky-500/15 text-xs font-medium text-sky-50 shadow-[0_0_20px_-8px_rgba(56,189,248,0.45)] hover:bg-sky-500/25"
+            >
+              <Link href="/evidence">Evidence Library</Link>
+            </Button>
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-8 border-slate-500/60 bg-slate-900/50 text-xs text-slate-100 hover:bg-slate-800/80"
+            >
+              <Link href="/login">Sign in</Link>
+            </Button>
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-8 border-slate-500/60 bg-slate-900/50 text-xs text-slate-100 hover:bg-slate-800/80"
+            >
+              <Link href="/signup">Create account</Link>
+            </Button>
+          </div>
+          <p className="mt-4 text-xs leading-relaxed text-slate-500">
+            Guest usage may be logged with technical identifiers (such as IP address and browser or device metadata) for
+            security, moderation, and evidence integrity. Signing in links activity to your account.
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2 rounded-lg border border-sky-300/80 bg-sky-50/90 px-3 py-3 shadow-sm">
-          <Button asChild className="bg-primary text-primary-foreground">
-            <Link href="/evidence">Evidence Library</Link>
-          </Button>
-          <Button variant="outline" asChild className="border-border bg-card text-foreground">
-            <Link href="/login">Sign in</Link>
-          </Button>
-          <Button variant="secondary" asChild>
-            <Link href="/signup">Create account</Link>
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Guest usage may be logged with technical identifiers (such as IP address and browser or device metadata) for
-          security, moderation, and evidence integrity. Signing in links activity to your account.
-        </p>
       </div>
     );
   }
 
-  let evidenceRows: {
-    id: string;
-    original_filename: string;
-    display_filename: string | null;
-    short_alias: string | null;
-    created_at: string;
-    case_id: string | null;
-    source_type: string | null;
-    source_platform: string | null;
-    source_program: string | null;
-    processing_status: import("@/types").EvidenceProcessingStatus;
-    extraction_status: string | null;
-    case_membership_count: number;
-    has_ai_analysis: boolean;
-    viewed: boolean;
-    has_content_duplicate_peer: boolean;
-  }[] = [];
-  try {
-    const all = await listEvidenceVisible(supabase);
-    const visible = all.map((r) => ({
-      id: r.id as string,
-      original_filename: ((r.original_filename as string) ?? "File").trim() || "File",
-      display_filename: (r.display_filename as string | null) ?? null,
-      short_alias: (r.short_alias as string | null) ?? null,
-      created_at: (r.created_at as string) ?? "",
-      case_id: (r.case_id as string | null) ?? null,
-      source_type: (r.source_type as string | null) ?? null,
-      source_platform: (r.source_platform as string | null) ?? null,
-      source_program: (r.source_program as string | null) ?? null,
-      processing_status: r.processing_status as import("@/types").EvidenceProcessingStatus,
-      extraction_status: (r.extraction_status as string | null) ?? null,
-      content_sha256: (r.content_sha256 as string | null) ?? null,
-    }));
-
-    let rows = visible;
-    if (caseId) {
-      const membershipIds = new Set<string>();
-      const membershipRes = await supabase
-        .from("evidence_case_memberships")
-        .select("evidence_file_id")
-        .eq("case_id", caseId);
-      if (!membershipRes.error) {
-        for (const m of membershipRes.data ?? []) {
-          membershipIds.add(m.evidence_file_id as string);
-        }
-      } else if (!isEvidenceCaseMembershipTableError(membershipRes.error)) {
-        throw new Error(membershipRes.error.message);
-      }
-      rows = visible.filter((r) => r.case_id === caseId || membershipIds.has(r.id));
-    } else {
-      rows = visible.slice(0, 24);
-    }
-
-    const ids = rows.map((r) => r.id);
-    const [counts, hasAi, viewedSet, dupFlags] = await Promise.all([
-      getEvidenceCaseMembershipCounts(supabase, ids),
-      getEvidenceHasAiAnalysisMap(supabase, ids),
-      user ? getEvidenceViewedSet(supabase, user.id, ids) : Promise.resolve(new Set<string>()),
-      getEvidenceContentDuplicatePeerFlags(supabase, { userId: user!.id }, rows),
-    ]);
-
-    evidenceRows = rows.map((r) => ({
-      id: r.id,
-      original_filename: r.original_filename,
-      display_filename: r.display_filename,
-      short_alias: r.short_alias,
-      created_at: r.created_at,
-      case_id: r.case_id,
-      source_type: r.source_type,
-      source_platform: r.source_platform,
-      source_program: r.source_program,
-      processing_status: r.processing_status,
-      extraction_status: r.extraction_status,
-      case_membership_count: counts.get(r.id) ?? 0,
-      has_ai_analysis: hasAi.get(r.id) ?? false,
-      viewed: viewedSet.has(r.id),
-      has_content_duplicate_peer: dupFlags.get(r.id) ?? false,
-    }));
-  } catch {
-    evidenceRows = [];
-  }
-
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Workspace home — shortcuts, saved workspace chat, and a quick look at recent evidence.
-        </p>
-      </div>
-
-      <nav
-        className="flex flex-wrap gap-2 rounded-lg border border-sky-300/80 bg-sky-50/95 px-3 py-3 shadow-sm"
-        aria-label="Dashboard shortcuts"
-      >
-        <Button asChild size="sm" className="bg-primary text-primary-foreground shadow-sm">
-          <Link href="/cases/new">New investigation</Link>
-        </Button>
-        <Button asChild size="sm" variant="secondary" className="border-border bg-card text-foreground shadow-sm">
-          <Link href="/evidence">Evidence Library (all files)</Link>
-        </Button>
-        <Button asChild size="sm" variant="secondary" className="border-border bg-card text-foreground shadow-sm">
-          <Link href="/evidence/add">Upload to library without opening a case</Link>
-        </Button>
-        <Button asChild size="sm" variant="outline" className="border-sky-400/80 bg-white text-foreground shadow-sm">
-          <Link href="/evidence/compare">Compare two evidence files</Link>
-        </Button>
-      </nav>
-      <p className="text-xs text-muted-foreground leading-relaxed max-w-3xl">
-        <span className="font-medium text-foreground">Evidence Library</span> lists every file you can access.{" "}
-        <span className="font-medium text-foreground">Current case evidence</span> is the list on an open case
-        workspace — only items linked to that investigation.
-      </p>
-
-      <DashboardMainPanels
-        evidenceRows={evidenceRows}
-      />
+    <div className="mx-auto w-full max-w-[min(100%,88rem)] px-1 py-2 sm:px-0 sm:py-4">
+      <DashboardCommandHub />
     </div>
   );
 }

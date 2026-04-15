@@ -37,6 +37,7 @@ export default function NewCasePage() {
   const idempotencyKeyRef = useRef(crypto.randomUUID());
   const [similarOpen, setSimilarOpen] = useState(false);
   const [similarCases, setSimilarCases] = useState<CaseSimilarSuggestion[]>([]);
+  const [createdCaseId, setCreatedCaseId] = useState<string | null>(null);
 
   useEffect(() => {
     idempotencyKeyRef.current = crypto.randomUUID();
@@ -83,8 +84,7 @@ export default function NewCasePage() {
       setError(JSON.stringify((data as { error?: unknown }).error ?? "Failed"));
       return;
     }
-    router.push(`/cases/${(data as { id: string }).id}`);
-    router.refresh();
+    setCreatedCaseId((data as { id: string }).id);
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -267,12 +267,45 @@ export default function NewCasePage() {
                 className="border-input bg-form-field text-form-field-foreground placeholder:text-muted-foreground min-h-[140px]"
               />
             </div>
-            <Button type="submit" disabled={loading || similarOpen} className="bg-primary text-primary-foreground">
+            <Button type="submit" disabled={loading || similarOpen || !!createdCaseId} className="bg-primary text-primary-foreground">
               {loading ? "Checking…" : "Continue"}
             </Button>
           </form>
         </CardContent>
       </Card>
+
+      {createdCaseId ? (
+        <Card className="border-border shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-foreground">Investigation created</CardTitle>
+            <CardDescription className="text-foreground/90">
+              Do you want to add evidence now or later?
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              className="bg-primary text-primary-foreground"
+              onClick={() => {
+                router.push(`/cases/${createdCaseId}/evidence/add`);
+                router.refresh();
+              }}
+            >
+              Add evidence now
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                router.push(`/cases/${createdCaseId}`);
+                router.refresh();
+              }}
+            >
+              Add evidence later
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <SimilarCasesModal
         open={similarOpen}

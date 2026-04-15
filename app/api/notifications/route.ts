@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { listNotificationsForUser } from "@/services/evidence-share-proposal-service";
+import { listNotificationsForUser } from "@/services/notification-service";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";

@@ -122,21 +122,7 @@ export async function respondToEvidenceShareProposal(
   }
 }
 
-export async function listNotificationsForUser(supabase: AppSupabaseClient, input?: { limit?: number }) {
-  const lim = Math.min(input?.limit ?? 40, 100);
-  const { data, error } = await supabase
-    .from("user_notifications")
-    .select("id, kind, title, body, payload, read_at, created_at")
-    .order("created_at", { ascending: false })
-    .limit(lim);
-  if (error) throw new Error(error.message);
-  return data ?? [];
-}
-
-export async function markNotificationRead(supabase: AppSupabaseClient, notificationId: string): Promise<void> {
-  const { error } = await supabase
-    .from("user_notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("id", notificationId);
-  if (error) throw new Error(error.message);
-}
+export {
+  listNotificationsForUser,
+  markNotificationRead,
+} from "@/services/notification-service";

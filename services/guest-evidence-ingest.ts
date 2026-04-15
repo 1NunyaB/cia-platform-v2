@@ -174,7 +174,7 @@ export async function ingestGuestEvidenceFromUrl(
   const { guestSessionId, url, source, forceDuplicate, audit } = input;
   const parsed = parsePublicHttpUrl(url);
   const fetched = await fetchTextFromPublicUrl(url);
-  const { text, extractionNote: fetchNote } = fetched;
+  const { text, extractionNote: fetchNote, rawHtml } = fetched;
 
   const filename = buildImportFilename(parsed);
   const buffer = Buffer.from(text, "utf8");
@@ -267,6 +267,17 @@ export async function ingestGuestEvidenceFromUrl(
   } catch (e) {
     await supabase.storage.from(EVIDENCE_BUCKET).remove([path]);
     throw e;
+  }
+
+  if (rawHtml?.trim()) {
+    const rawPath = `${path}.raw.html`;
+    try {
+      await supabase.storage
+        .from(EVIDENCE_BUCKET)
+        .upload(rawPath, Buffer.from(rawHtml, "utf8"), { contentType: "text/html; charset=utf-8", upsert: true });
+    } catch {
+      // Non-blocking: guest evidence primary cleaned text is already stored.
+    }
   }
 
   await updateEvidenceStatus(supabase, evidenceId, "complete");

@@ -33,7 +33,7 @@ import { listEvidenceLinksForEvidence } from "@/services/case-investigation-quer
 import { runEvidenceIntelligenceOnOpen } from "@/services/evidence-intelligence-service";
 import { EvidenceIntelligencePanel } from "@/components/evidence-intelligence-panel";
 import type { EvidenceIntelligenceResult } from "@/types/evidence-intelligence";
-import type { AiAnalysis, EvidenceProcessingStatus } from "@/types";
+import type { AiAnalysis, EvidenceFile, EvidenceProcessingStatus } from "@/types";
 import type { ClusterAnalysisView } from "@/types/analysis";
 import { EVIDENCE_SOURCE_TYPE_LABELS, type EvidenceSourceType } from "@/lib/evidence-source";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
@@ -45,6 +45,7 @@ import { RecordEvidenceView } from "@/components/record-evidence-view";
 import { EvidenceWorkflowStatusCard } from "@/components/evidence-workflow-status-card";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 import { EvidenceDeleteButton } from "@/components/evidence-delete-button";
+import { EvidenceLocationGeoPanel } from "@/components/evidence-location-geo-panel";
 
 /** Shown when user arrives from Investigation Actions (?intent=) — same structured pipeline; copy stays conservative. */
 const INVESTIGATION_INTENT_MESSAGES: Record<string, string> = {
@@ -207,6 +208,14 @@ export default async function EvidenceDetailPage({
       />
 
       <EvidenceKindPanel evidenceId={evidenceId} row={ev} canEdit={Boolean(user)} />
+
+      {user && (ev as EvidenceFile).image_category === "location" ? (
+        <EvidenceLocationGeoPanel
+          evidenceId={evidenceId}
+          initialLatitude={(ev as EvidenceFile).latitude ?? null}
+          initialLongitude={(ev as EvidenceFile).longitude ?? null}
+        />
+      ) : null}
 
       <Card className="border-border bg-card shadow-sm">
         <CardHeader className="space-y-0 px-3 py-2 pb-1">

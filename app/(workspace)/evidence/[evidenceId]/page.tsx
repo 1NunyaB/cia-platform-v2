@@ -7,7 +7,7 @@ import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 import { CopyInlineButton } from "@/components/copy-inline-button";
 import { AssignEvidenceToCase } from "@/components/assign-evidence-to-case";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { EvidenceProcessingStatus } from "@/types";
+import type { EvidenceFile, EvidenceProcessingStatus } from "@/types";
 import { EVIDENCE_SOURCE_TYPE_LABELS, type EvidenceSourceType } from "@/lib/evidence-source";
 import { getGuestSessionIdFromCookies } from "@/lib/guest-session";
 import { tryCreateServiceClient } from "@/lib/supabase/service";
@@ -17,6 +17,7 @@ import { EvidenceKindPanel } from "@/components/evidence-kind-panel";
 import { RecordEvidenceView } from "@/components/record-evidence-view";
 import { EvidenceWorkflowStatusCard } from "@/components/evidence-workflow-status-card";
 import { EvidenceDeleteButton } from "@/components/evidence-delete-button";
+import { EvidenceLocationGeoPanel } from "@/components/evidence-location-geo-panel";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 
 /**
@@ -157,6 +158,14 @@ export default async function LibraryEvidenceDetailPage({
         row={ev}
         canEdit={Boolean(user || guestId)}
       />
+
+      {user && (ev as EvidenceFile).image_category === "location" ? (
+        <EvidenceLocationGeoPanel
+          evidenceId={evidenceId}
+          initialLatitude={(ev as EvidenceFile).latitude ?? null}
+          initialLongitude={(ev as EvidenceFile).longitude ?? null}
+        />
+      ) : null}
 
       <Card className="border-border bg-white shadow-sm">
         <CardHeader className="space-y-0 px-3 py-2 pb-1">

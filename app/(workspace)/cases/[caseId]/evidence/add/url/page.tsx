@@ -8,7 +8,7 @@ export default async function CaseAddEvidenceUrlPage({ params }: { params: Promi
       backHref={`/cases/${caseId}/evidence/add`}
       backLabel="Add evidence options"
       title="Import from URL"
-      subtitle="Paste a public https:// link. This path is separate from direct file uploads."
+      subtitle="Paste public links (protocol optional). This path is separate from direct file uploads."
     >
       <EvidenceIntakeUrlForm mode="case" caseId={caseId} />
     </EvidenceIntakeShell>

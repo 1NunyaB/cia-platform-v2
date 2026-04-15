@@ -67,6 +67,24 @@ const KIND_ORDER: TimelineKind[] = [
   "custom",
 ];
 
+/** View modes: dense calendar drill (list), swimlanes by perspective (lanes), full dated stack (spine). */
+export type TimelineLayoutView = "list" | "lanes" | "spine";
+
+const STANDARD_LANE_LABEL_ORDER = KIND_ORDER.map((k) => TIMELINE_KIND_LABELS[k]);
+
+function sortLaneLabelKeys(keys: string[]): string[] {
+  return [...keys].sort((a, b) => {
+    const ia = STANDARD_LANE_LABEL_ORDER.indexOf(a);
+    const ib = STANDARD_LANE_LABEL_ORDER.indexOf(b);
+    if (ia !== -1 || ib !== -1) {
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    }
+    return a.localeCompare(b);
+  });
+}
+
 type Phase = "year" | "month" | "week" | "day" | "events" | "undated";
 
 function laneLabel(ev: WorkspaceTimelineEvent): string {
@@ -198,6 +216,7 @@ export function CaseTimelineWorkspace({
     day: null,
   });
   const [undatedMode, setUndatedMode] = useState(false);
+  const [layoutView, setLayoutView] = useState<TimelineLayoutView>("list");
 
   const [isPending, startTransition] = useTransition();
 
@@ -240,6 +259,32 @@ export function CaseTimelineWorkspace({
   );
 
   const years = useMemo(() => uniqueYearsFromDates(effectiveDates), [effectiveDates]);
+
+  const eventsByLaneLabel = useMemo(() => {
+    const m = new Map<string, WorkspaceTimelineEvent[]>();
+    for (const ev of filteredByLane) {
+      const lab = laneLabel(ev);
+      const arr = m.get(lab) ?? [];
+      arr.push(ev);
+      m.set(lab, arr);
+    }
+    for (const arr of m.values()) {
+      arr.sort((a, b) => {
+        const da = getEffectiveDate(a, placements, useTheoryPlacement)?.getTime() ?? 0;
+        const db = getEffectiveDate(b, placements, useTheoryPlacement)?.getTime() ?? 0;
+        return da - db;
+      });
+    }
+    return m;
+  }, [filteredByLane, placements, useTheoryPlacement]);
+
+  const spineSortedEvents = useMemo(() => {
+    return [...filteredByLane].sort((a, b) => {
+      const da = getEffectiveDate(a, placements, useTheoryPlacement)?.getTime() ?? 0;
+      const db = getEffectiveDate(b, placements, useTheoryPlacement)?.getTime() ?? 0;
+      return da - db;
+    });
+  }, [filteredByLane, placements, useTheoryPlacement]);
 
   const evidencePanelItems = useMemo(() => {
     const map = new Map<
@@ -348,6 +393,29 @@ export function CaseTimelineWorkspace({
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { id: "list" as const, label: "First one" },
+            { id: "lanes" as const, label: "Second one" },
+            { id: "spine" as const, label: "Third one" },
+          ] as const
+        ).map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => setLayoutView(opt.id)}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+              layoutView === opt.id
+                ? "border-foreground/30 bg-foreground/10 text-foreground"
+                : "border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
         {modeButtons.map((m) => (
           <button
             key={m.id}
@@ -421,6 +489,7 @@ export function CaseTimelineWorkspace({
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_min(100%,380px)] gap-6 items-start">
+        {layoutView === "list" ? (
         <Card className="border-border bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Calendar</CardTitle>
@@ -547,6 +616,69 @@ export function CaseTimelineWorkspace({
             ) : null}
           </CardContent>
         </Card>
+        ) : layoutView === "lanes" ? (
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Horizontal lanes</CardTitle>
+            <CardDescription className="text-xs">
+              One band per timeline perspective; cards flow left to right in time order within each lane.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TimelineLanesView
+              eventsByLane={eventsByLaneLabel}
+              caseId={caseId}
+              workspaceMode={workspaceMode}
+              placements={placements}
+              useTheoryPlacement={useTheoryPlacement}
+              onPlacementSaved={(id, iso) => setPlacements((p) => ({ ...p, [id]: iso }))}
+              onPlacementCleared={(id) =>
+                setPlacements((p) => {
+                  const n = { ...p };
+                  delete n[id];
+                  return n;
+                })
+              }
+              userId={userId}
+              isPending={isPending}
+              startTransition={startTransition}
+            />
+          </CardContent>
+        </Card>
+        ) : (
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Vertical spine</CardTitle>
+            <CardDescription className="text-xs">
+              All events matching the current lane filters, in one chronological column.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!filteredByLane.length ? (
+              <p className="text-sm text-muted-foreground">No events for the selected timelines.</p>
+            ) : (
+              <EventList
+                caseId={caseId}
+                events={spineSortedEvents}
+                workspaceMode={workspaceMode}
+                placements={placements}
+                useTheoryPlacement={useTheoryPlacement}
+                onPlacementSaved={(id, iso) => setPlacements((p) => ({ ...p, [id]: iso }))}
+                onPlacementCleared={(id) =>
+                  setPlacements((p) => {
+                    const n = { ...p };
+                    delete n[id];
+                    return n;
+                  })
+                }
+                userId={userId}
+                isPending={isPending}
+                startTransition={startTransition}
+              />
+            )}
+          </CardContent>
+        </Card>
+        )}
 
         <aside className="space-y-3 lg:sticky lg:top-4">
           <Card className="border-border bg-card">
@@ -728,6 +860,188 @@ function DayRow({
   );
 }
 
+function TimelineEventCard({
+  caseId,
+  ev,
+  workspaceMode,
+  placements,
+  useTheoryPlacement,
+  onPlacementSaved,
+  onPlacementCleared,
+  userId,
+  isPending,
+  startTransition,
+}: {
+  caseId: string;
+  ev: WorkspaceTimelineEvent;
+  workspaceMode: WorkspaceMode;
+  placements: Record<string, string>;
+  useTheoryPlacement: boolean;
+  onPlacementSaved: (id: string, iso: string) => void;
+  onPlacementCleared: (id: string) => void;
+  userId: string | null;
+  isPending: boolean;
+  startTransition: (cb: () => void) => void;
+}) {
+  const kind = normalizeTimelineKind(ev.timeline_kind);
+  const accent = TIMELINE_KIND_ACCENT[kind];
+  const tier = ev.timeline_tier;
+  const locked = tier === "t1_confirmed";
+  const canTheoryMove = !locked && (tier === "t2_supported" || tier === "t3_leads");
+  const showCorr = workspaceMode === "reconstructed" && isCorrelated(ev);
+  const hypVal = placements[ev.id] ? new Date(placements[ev.id]).toISOString().slice(0, 16) : "";
+
+  const saveHyp = () => {
+    const el = document.getElementById(`hyp-${ev.id}`) as HTMLInputElement | null;
+    if (!el?.value) return;
+    const iso = new Date(el.value).toISOString();
+    const fd = new FormData();
+    fd.set("caseId", caseId);
+    fd.set("eventId", ev.id);
+    fd.set("provisionalOccurredAt", iso);
+    startTransition(() => {
+      void saveTheoryPlacementAction(fd).then(() => onPlacementSaved(ev.id, iso));
+    });
+  };
+
+  const clearHyp = () => {
+    const fd = new FormData();
+    fd.set("caseId", caseId);
+    fd.set("eventId", ev.id);
+    startTransition(() => {
+      void clearTheoryPlacementAction(fd).then(() => onPlacementCleared(ev.id));
+    });
+  };
+
+  return (
+    <div className={`rounded-lg border border-border border-l-4 ${accent} pl-3 pr-3 py-3 bg-panel`}>
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <span>{ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : "Undated (canonical)"}</span>
+        <span className="rounded border border-border px-1.5 py-0.5">{laneLabel(ev)}</span>
+        {tier ? (
+          <span
+            className={`rounded border px-1.5 py-0.5 ${
+              tier === "t1_confirmed"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                : tier === "t2_supported"
+                  ? showCorr
+                    ? "border-amber-300 bg-amber-50 text-amber-950"
+                    : "border-sky-300 bg-sky-50 text-sky-950"
+                  : "border-border text-muted-foreground"
+            }`}
+          >
+            {TIMELINE_TIER_LABELS[tier]}
+            {showCorr ? " · Correlated" : ""}
+          </span>
+        ) : null}
+        {ev.authenticity_label ? <AuthenticityBadge value={ev.authenticity_label} /> : null}
+        {locked ? <span className="text-emerald-500/80">Locked (confirmed)</span> : null}
+      </div>
+      <div className="font-medium mt-1">{ev.title}</div>
+      {ev.source_label ? <p className="text-[11px] text-muted-foreground">Source: {ev.source_label}</p> : null}
+      {ev.summary ? <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{ev.summary}</p> : null}
+
+      {workspaceMode === "theory" && userId && canTheoryMove ? (
+        <div className="mt-2 flex flex-wrap items-end gap-2 text-xs">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-muted-foreground">Hypothesis time</span>
+            <input
+              key={hypVal}
+              type="datetime-local"
+              defaultValue={hypVal}
+              className="rounded border border-input bg-form-field px-2 py-1 text-xs text-black [color-scheme:light]"
+              disabled={isPending}
+              id={`hyp-${ev.id}`}
+            />
+          </label>
+          <Button type="button" size="sm" variant="secondary" className="text-xs" disabled={isPending} onClick={saveHyp}>
+            Save hypothesis
+          </Button>
+          <Button type="button" variant="ghost" size="sm" className="text-xs" disabled={isPending} onClick={clearHyp}>
+            Clear
+          </Button>
+        </div>
+      ) : null}
+
+      {workspaceMode === "theory" && placements[ev.id] ? (
+        <p className="mt-1 text-[11px] text-amber-900">
+          Hypothesis placement: {new Date(placements[ev.id]).toLocaleString()}
+        </p>
+      ) : null}
+
+      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+        {(ev.timeline_event_evidence ?? []).map((row) => (
+          <Link
+            key={row.evidence_file_id}
+            href={`/cases/${caseId}/evidence/${row.evidence_file_id}`}
+            className="text-sky-400 hover:underline"
+          >
+            {row.evidence_files?.original_filename ?? row.evidence_file_id}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TimelineLanesView({
+  eventsByLane,
+  caseId,
+  workspaceMode,
+  placements,
+  useTheoryPlacement,
+  onPlacementSaved,
+  onPlacementCleared,
+  userId,
+  isPending,
+  startTransition,
+}: {
+  eventsByLane: Map<string, WorkspaceTimelineEvent[]>;
+  caseId: string;
+  workspaceMode: WorkspaceMode;
+  placements: Record<string, string>;
+  useTheoryPlacement: boolean;
+  onPlacementSaved: (id: string, iso: string) => void;
+  onPlacementCleared: (id: string) => void;
+  userId: string | null;
+  isPending: boolean;
+  startTransition: (cb: () => void) => void;
+}) {
+  const keys = sortLaneLabelKeys([...eventsByLane.keys()]);
+  if (keys.length === 0) {
+    return <p className="text-sm text-muted-foreground">No events for the selected timelines.</p>;
+  }
+  return (
+    <div className="space-y-6">
+      {keys.map((lab) => (
+        <section key={lab}>
+          <h3 className="mb-2 border-b border-border pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {lab}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {(eventsByLane.get(lab) ?? []).map((ev) => (
+              <div key={ev.id} className="min-w-[200px] flex-1 basis-[280px] max-w-lg">
+                <TimelineEventCard
+                  caseId={caseId}
+                  ev={ev}
+                  workspaceMode={workspaceMode}
+                  placements={placements}
+                  useTheoryPlacement={useTheoryPlacement}
+                  onPlacementSaved={onPlacementSaved}
+                  onPlacementCleared={onPlacementCleared}
+                  userId={userId}
+                  isPending={isPending}
+                  startTransition={startTransition}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function EventList({
   caseId,
   events,
@@ -759,109 +1073,22 @@ function EventList({
 
   return (
     <ul className="space-y-4">
-      {sorted.map((ev) => {
-        const kind = normalizeTimelineKind(ev.timeline_kind);
-        const accent = TIMELINE_KIND_ACCENT[kind];
-        const tier = ev.timeline_tier;
-        const locked = tier === "t1_confirmed";
-        const canTheoryMove = !locked && (tier === "t2_supported" || tier === "t3_leads");
-        const showCorr = workspaceMode === "reconstructed" && isCorrelated(ev);
-        const hypVal = placements[ev.id]
-          ? new Date(placements[ev.id]).toISOString().slice(0, 16)
-          : "";
-
-        const saveHyp = () => {
-          const el = document.getElementById(`hyp-${ev.id}`) as HTMLInputElement | null;
-          if (!el?.value) return;
-          const iso = new Date(el.value).toISOString();
-          const fd = new FormData();
-          fd.set("caseId", caseId);
-          fd.set("eventId", ev.id);
-          fd.set("provisionalOccurredAt", iso);
-          startTransition(() => {
-            void saveTheoryPlacementAction(fd).then(() => onPlacementSaved(ev.id, iso));
-          });
-        };
-
-        const clearHyp = () => {
-          const fd = new FormData();
-          fd.set("caseId", caseId);
-          fd.set("eventId", ev.id);
-          startTransition(() => {
-            void clearTheoryPlacementAction(fd).then(() => onPlacementCleared(ev.id));
-          });
-        };
-
-        return (
-          <li key={ev.id} className={`rounded-lg border border-border border-l-4 ${accent} pl-3 pr-3 py-3 bg-panel`}>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              <span>{ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : "Undated (canonical)"}</span>
-              <span className="rounded border border-border px-1.5 py-0.5">{laneLabel(ev)}</span>
-              {tier ? (
-                <span
-                  className={`rounded border px-1.5 py-0.5 ${
-                    tier === "t1_confirmed"
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-950"
-                      : tier === "t2_supported"
-                        ? showCorr
-                          ? "border-amber-300 bg-amber-50 text-amber-950"
-                          : "border-sky-300 bg-sky-50 text-sky-950"
-                        : "border-border text-muted-foreground"
-                  }`}
-                >
-                  {TIMELINE_TIER_LABELS[tier]}
-                  {showCorr ? " · Correlated" : ""}
-                </span>
-              ) : null}
-              {ev.authenticity_label ? <AuthenticityBadge value={ev.authenticity_label} /> : null}
-              {locked ? <span className="text-emerald-500/80">Locked (confirmed)</span> : null}
-            </div>
-            <div className="font-medium mt-1">{ev.title}</div>
-            {ev.source_label ? <p className="text-[11px] text-muted-foreground">Source: {ev.source_label}</p> : null}
-            {ev.summary ? <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{ev.summary}</p> : null}
-
-            {workspaceMode === "theory" && userId && canTheoryMove ? (
-              <div className="mt-2 flex flex-wrap items-end gap-2 text-xs">
-                <label className="flex flex-col gap-1">
-                  <span className="text-[10px] text-muted-foreground">Hypothesis time</span>
-                  <input
-                    key={hypVal}
-                    type="datetime-local"
-                    defaultValue={hypVal}
-                    className="rounded border border-input bg-form-field px-2 py-1 text-xs text-black [color-scheme:light]"
-                    disabled={isPending}
-                    id={`hyp-${ev.id}`}
-                  />
-                </label>
-                <Button type="button" size="sm" variant="secondary" className="text-xs" disabled={isPending} onClick={saveHyp}>
-                  Save hypothesis
-                </Button>
-                <Button type="button" variant="ghost" size="sm" className="text-xs" disabled={isPending} onClick={clearHyp}>
-                  Clear
-                </Button>
-              </div>
-            ) : null}
-
-            {workspaceMode === "theory" && placements[ev.id] ? (
-              <p className="mt-1 text-[11px] text-amber-900">
-                Hypothesis placement: {new Date(placements[ev.id]).toLocaleString()}
-              </p>
-            ) : null}
-
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              {(ev.timeline_event_evidence ?? []).map((row) => (
-                <Link
-                  key={row.evidence_file_id}
-                  href={`/cases/${caseId}/evidence/${row.evidence_file_id}`}
-                  className="text-sky-400 hover:underline"
-                >
-                  {row.evidence_files?.original_filename ?? row.evidence_file_id}
-                </Link>
-              ))}
-            </div>
-          </li>
-        );
-      })}
+      {sorted.map((ev) => (
+        <li key={ev.id}>
+          <TimelineEventCard
+            caseId={caseId}
+            ev={ev}
+            workspaceMode={workspaceMode}
+            placements={placements}
+            useTheoryPlacement={useTheoryPlacement}
+            onPlacementSaved={onPlacementSaved}
+            onPlacementCleared={onPlacementCleared}
+            userId={userId}
+            isPending={isPending}
+            startTransition={startTransition}
+          />
+        </li>
+      ))}
     </ul>
   );
 }

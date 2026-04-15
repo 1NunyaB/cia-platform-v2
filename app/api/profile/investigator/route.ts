@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -6,7 +7,7 @@ export const runtime = "nodejs";
 const MAX_ALIAS = 80;
 const MAX_TAGLINE = 160;
 
-/** Read or update opt-in investigator identity (registered users only). Avatar images use POST /api/profile/investigator/avatar — not manual URLs. */
+/** Read or update investigator identity (registered users only). Avatar images use POST /api/profile/investigator/avatar — not manual URLs. */
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -65,21 +66,71 @@ export async function PATCH(request: Request) {
     );
   }
 
+  const now = new Date().toISOString();
   const patch: Record<string, unknown> = {
     investigator_opt_in: optIn,
-    investigator_alias: optIn ? aliasRaw.slice(0, MAX_ALIAS) : null,
-    investigator_tagline: optIn && taglineRaw ? taglineRaw.slice(0, MAX_TAGLINE) : null,
+    investigator_alias: aliasRaw ? aliasRaw.slice(0, MAX_ALIAS) : null,
+    investigator_tagline: taglineRaw ? taglineRaw.slice(0, MAX_TAGLINE) : null,
+    updated_at: now,
   };
 
-  if (!optIn) {
-    patch.investigator_alias = null;
-    patch.investigator_tagline = null;
-    patch.investigator_avatar_url = null;
+  const { data: existing, error: fetchErr } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (fetchErr) {
+    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
   }
 
-  const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
+  const selectCols =
+    "id, investigator_opt_in, investigator_alias, investigator_avatar_url, investigator_tagline" as const;
+
+  if (!existing) {
+    const emailLocal = user.email?.split("@")[0]?.trim();
+    const { data: row, error: insErr } = await supabase
+      .from("profiles")
+      .insert({
+        id: user.id,
+        display_name: emailLocal || null,
+        ...patch,
+      })
+      .select(selectCols)
+      .single();
+    if (insErr) {
+      return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
+    revalidatePath("/investigators");
+    return NextResponse.json({
+      ok: true,
+      profile: {
+        id: row.id as string,
+        investigator_opt_in: Boolean(row.investigator_opt_in),
+        investigator_alias: (row.investigator_alias as string | null) ?? null,
+        investigator_avatar_url: (row.investigator_avatar_url as string | null) ?? null,
+        investigator_tagline: (row.investigator_tagline as string | null) ?? null,
+      },
+    });
+  }
+
+  const { data: row, error } = await supabase
+    .from("profiles")
+    .update(patch)
+    .eq("id", user.id)
+    .select(selectCols)
+    .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  revalidatePath("/investigators");
+  return NextResponse.json({
+    ok: true,
+    profile: {
+      id: row.id as string,
+      investigator_opt_in: Boolean(row.investigator_opt_in),
+      investigator_alias: (row.investigator_alias as string | null) ?? null,
+      investigator_avatar_url: (row.investigator_avatar_url as string | null) ?? null,
+      investigator_tagline: (row.investigator_tagline as string | null) ?? null,
+    },
+  });
 }

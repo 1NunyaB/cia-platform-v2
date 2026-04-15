@@ -10,6 +10,7 @@ import {
 export type UrlImportResult = {
   text: string;
   extractionNote?: string;
+  rawHtml?: string;
   /** For display / storage filename */
   sourceLabel: string;
 };
@@ -22,6 +23,76 @@ export type UrlImportLinkCandidate = {
 
 function safeFilenameSegment(s: string): string {
   return s.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "page";
+}
+
+function collapseBlankLines(s: string): string {
+  return s
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripHtmlNoise(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|noscript|template|meta|link|svg|canvas|iframe)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<(script|style|noscript|template|meta|link|svg|canvas|iframe)\b[^>]*\/?>/gi, " ")
+    .replace(/<(nav|header|footer|aside|form)[^>]*>[\s\S]*?<\/\1>/gi, " ");
+}
+
+function extractHtmlTitle(html: string): string | null {
+  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = m?.[1] ? htmlToPlainText(m[1]) : "";
+  return title.trim() ? title.trim() : null;
+}
+
+function extractMainHtmlBlock(cleanHtml: string): string {
+  const candidates = [
+    /<article\b[^>]*>([\s\S]*?)<\/article>/i,
+    /<main\b[^>]*>([\s\S]*?)<\/main>/i,
+    /<section\b[^>]*(?:id|class)=["'][^"']*(?:content|article|post|story|body)[^"']*["'][^>]*>([\s\S]*?)<\/section>/i,
+    /<div\b[^>]*(?:id|class)=["'][^"']*(?:content|article|post|story|body)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    /<body\b[^>]*>([\s\S]*?)<\/body>/i,
+  ];
+  for (const re of candidates) {
+    const m = cleanHtml.match(re);
+    if (m?.[1]?.trim()) return m[1];
+  }
+  return cleanHtml;
+}
+
+function htmlFragmentToReadableText(fragment: string): string {
+  const withBreaks = fragment
+    .replace(/<(h1|h2|h3|h4|h5|h6|p|li|blockquote|section|article|main|div|br)\b[^>]*>/gi, "\n")
+    .replace(/<\/(h1|h2|h3|h4|h5|h6|p|li|blockquote|section|article|main|div)>/gi, "\n");
+  return collapseBlankLines(htmlToPlainText(withBreaks));
+}
+
+function extractHeadingsFromHtml(fragment: string, max = 12): string[] {
+  const out: string[] = [];
+  const re = /<h[1-3]\b[^>]*>([\s\S]*?)<\/h[1-3]>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(fragment)) && out.length < max) {
+    const text = htmlToPlainText(m[1] ?? "").trim();
+    if (text) out.push(text);
+  }
+  return out;
+}
+
+function buildExtractedPageText(input: { sourceUrl: string; html: string }): string {
+  const noNoise = stripHtmlNoise(input.html);
+  const title = extractHtmlTitle(noNoise);
+  const main = extractMainHtmlBlock(noNoise);
+  const headings = extractHeadingsFromHtml(main);
+  const body = htmlFragmentToReadableText(main);
+  const lines = [
+    title ? `Title: ${title}` : null,
+    `Source URL: ${input.sourceUrl}`,
+    headings.length ? `Headings:\n${headings.map((h) => `- ${h}`).join("\n")}` : null,
+    body ? `Body Text:\n${body}` : null,
+  ].filter(Boolean) as string[];
+  return collapseBlankLines(lines.join("\n\n"));
 }
 
 /**
@@ -92,19 +163,19 @@ export async function fetchTextFromPublicUrl(urlStr: string): Promise<UrlImportR
     };
   }
 
-  if (ct.startsWith("text/") || ct === "application/json" || ct === "") {
-    const text = buffer.toString("utf8");
-    if (!text.trim()) {
-      throw new Error("That page had no readable text content.");
-    }
-    return { text, sourceLabel };
-  }
-
   if (ct.includes("html") || ct.includes("xml")) {
     const html = buffer.toString("utf8");
-    const text = htmlToPlainText(html);
+    const text = buildExtractedPageText({ sourceUrl: sourceLabel, html });
     if (!text.trim()) {
       throw new Error("No readable text could be pulled from that page (it may be mostly images or scripts).");
+    }
+    return { text, sourceLabel, rawHtml: html };
+  }
+
+  if (ct.startsWith("text/") || ct === "application/json" || ct === "") {
+    const text = collapseBlankLines(buffer.toString("utf8"));
+    if (!text.trim()) {
+      throw new Error("That page had no readable text content.");
     }
     return { text, sourceLabel };
   }
@@ -122,8 +193,14 @@ export async function fetchTextFromPublicUrl(urlStr: string): Promise<UrlImportR
   }
 
   const asUtf8 = buffer.toString("utf8");
+  if (/<(html|head|body|article|main)\b/i.test(asUtf8)) {
+    const extracted = buildExtractedPageText({ sourceUrl: sourceLabel, html: asUtf8 });
+    if (extracted.trim()) {
+      return { text: extracted, sourceLabel, rawHtml: asUtf8 };
+    }
+  }
   if (asUtf8.trim() && !asUtf8.includes("\0")) {
-    return { text: asUtf8, sourceLabel };
+    return { text: collapseBlankLines(asUtf8), sourceLabel };
   }
 
   const stripped = htmlToPlainText(asUtf8);
