@@ -36,7 +36,10 @@ export function CaseNotesCommentsTabs({
             {notes.map((n) => (
               <li key={n.id} className="rounded-lg border border-border/60 bg-muted/5 p-3 text-sm">
                 <p className="mb-1 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground/90">{authorDisplayName(n, profiles)}</span>{" "}
+                  <span className="font-medium text-foreground/90">{authorDisplayName(
+                  {user_id: (co as unknown as { user_id?: string | null }).user_id ?? null,
+                   user_label: (co as unknown as { user_label?: string | null }).user_label ?? null,
+                  },profiles)}</span>{" "}
                                     <span className="text-muted-foreground/80">
                     {new Date(co.created_at as string).toLocaleString()}
                   </span>
