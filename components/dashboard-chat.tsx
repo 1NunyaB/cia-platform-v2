@@ -1,9 +1,11 @@
-// FIXED: use user_id instead of user_id
+"use client";
 
-const ids = new Set<string>();
+import React from "react";
 
-for (const m of messages) {
-  if (new Date(m.created_at).getTime() >= cutoff && m.user_id) {
-    ids.add(m.user_id as string);
-  }
+export function DashboardChat() {
+  return (
+    <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
+      Dashboard Chat coming soon
+    </div>
+  );
 }
