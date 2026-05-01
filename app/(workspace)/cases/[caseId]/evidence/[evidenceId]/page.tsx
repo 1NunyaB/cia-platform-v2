@@ -136,15 +136,16 @@ export default async function EvidenceDetailPage({
   }));
   const commentRoots = buildCommentTree(commentFlat);
 
-  const authorIds = [
-    ...notes.map((n) => n.user_id as string),
-    ...stickyBundles.flatMap((b) => [
-      b.sticky.user_id,
-      ...b.replies.map((r) => r.user_id),
+  const authorIds: string[] = [
+  ...notes.map((n) => n.user_id),
+  ...stickyBundles.flatMap((b) => [
+    b.sticky.user_id,
+    ...b.replies.map((r) => r.user_id),
     ]),
-    ...evidenceComments.map((c) => c.user_id as string),
-  ].filter(Boolean) as string[];
-  const profiles = await fetchProfilesByIds(supabase, [...new Set(userIds)]);
+    ...evidenceComments.map((c) => c.user_id),
+    ].filter((id): id is string => typeof id === "string");
+
+  const profiles = await fetchProfilesByIds(supabase, [...new Set(authorIds)]);
 
   const displayTitle = evidencePrimaryLabel({
     display_filename: ev.display_filename ?? null,
