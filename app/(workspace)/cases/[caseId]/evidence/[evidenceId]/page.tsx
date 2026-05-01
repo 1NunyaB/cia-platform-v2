@@ -141,11 +141,11 @@ export default async function EvidenceDetailPage({
   ...stickyBundles.flatMap((b) => [
     b.sticky.user_id,
     ...b.replies.map((r) => r.user_id),
-    ]),
-    ...evidenceComments.map((c) => c.user_id),
-    ].filter((id): id is string => typeof id === "string");
+  ]),
+  ...evidenceComments.map((c) => c.user_id),
+].filter((id): id is string => typeof id === "string");
 
-  const profiles = await fetchProfilesByIds(supabase, [...new Set(authorIds)]);
+const profiles = await fetchProfilesByIds(supabase, [...new Set(authorIds)]);
 
   const displayTitle = evidencePrimaryLabel({
     display_filename: ev.display_filename ?? null,
