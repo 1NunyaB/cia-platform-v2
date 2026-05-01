@@ -98,7 +98,7 @@ export function CaseEvidenceFileRows({
           <h3 className="text-sm font-semibold text-foreground">Evidence</h3>
           <p className="text-xs text-muted-foreground">
             One file per row. Use <span className="font-medium text-foreground/90">Add evidence</span> to attach more
-            files to this same incident. References-only rows are fine. Use the incident dialog's
+            files to this same incident. References-only rows are fine. Use the incident dialog&apos;s
             <span className="font-medium text-foreground/90"> Upload files</span> button after saving details.
           </p>
         </div>
