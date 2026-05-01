@@ -37,11 +37,11 @@ export function CaseNotesCommentsTabs({
               <li key={n.id} className="rounded-lg border border-border/60 bg-muted/5 p-3 text-sm">
                 <p className="mb-1 text-xs text-muted-foreground">
                   <span className="font-medium text-foreground/90">{authorDisplayName(n, profiles)}</span>{" "}
-                  <span className="text-muted-foreground/80">
-                    {new Date(n.created_at as string).toLocaleString()}
+                                    <span className="text-muted-foreground/80">
+                    {new Date(co.created_at as string).toLocaleString()}
                   </span>
                 </p>
-                <p className="whitespace-pre-wrap text-foreground/95">{n.body as string}</p>
+                <p className="whitespace-pre-wrap text-foreground/95">{co.body as string}</p>
               </li>
             ))}
           </ul>
@@ -56,7 +56,13 @@ export function CaseNotesCommentsTabs({
             {comments.map((co) => (
               <li key={co.id} className="rounded-lg border border-border/60 bg-muted/5 p-3 text-sm">
                 <p className="mb-1 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground/90">{authorDisplayName(co, profiles)}</span>
+                  <span className="font-medium text-foreground/90">{authorDisplayName(
+  {
+    user_id: (co as { user_id?: string | null }).user_id ?? null,
+    user_label: (co as { user_label?: string | null }).user_label ?? null,
+  },
+  profiles
+)}</span>
                 </p>
                 <p className="whitespace-pre-wrap text-foreground/95">{co.body as string}</p>
               </li>
