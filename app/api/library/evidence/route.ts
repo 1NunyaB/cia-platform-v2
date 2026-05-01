@@ -25,6 +25,25 @@ export type BulkLibraryEvidenceItemResult = {
   existing?: import("@/lib/evidence-upload-errors").DuplicateEvidenceMatch;
 };
 
+function classifyUploadFailureMessage(err: unknown): { status: number; message: string } {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  const msg = raw.toLowerCase();
+  if (
+    msg.includes("forbidden") ||
+    msg.includes("row-level security policy") ||
+    msg.includes("permission denied")
+  ) {
+    if (msg.includes("storage") || msg.includes("object")) {
+      return { status: 403, message: "Not allowed to upload this file to personal library storage." };
+    }
+    if (msg.includes("evidence_files") || msg.includes("next_evidence_file_sequence")) {
+      return { status: 403, message: "Not allowed to create an evidence record in your personal library." };
+    }
+    return { status: 403, message: "Not allowed to upload evidence to your personal library." };
+  }
+  return { status: 500, message: raw || "Upload failed" };
+}
+
 /** Upload evidence to the database without attaching a case (personal library). Authenticated or guest. */
 export async function POST(request: Request) {
   const actor = await resolveRequestActor();
@@ -162,9 +181,12 @@ export async function POST(request: Request) {
         const body = await buildDuplicateEvidenceResponse(dupClient, e);
         return NextResponse.json(body, { status: 200 });
       }
-      const message = e instanceof Error ? e.message : "Upload failed";
-      const status = isClientSafeUploadError(e) ? 400 : 500;
-      return NextResponse.json({ error: message }, { status });
+      if (isClientSafeUploadError(e)) {
+        const message = e instanceof Error ? e.message : "Upload failed";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      const classified = classifyUploadFailureMessage(e);
+      return NextResponse.json({ error: classified.message }, { status: classified.status });
     }
   }
 

@@ -7,10 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EvidenceStatusBullets } from "@/components/evidence-status-bullets";
 import { resolveEvidenceStatusBullets } from "@/lib/evidence-status-bullets";
+import { evidenceRowNeedsReviewUnopened } from "@/lib/evidence-row-needs";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 import { EVIDENCE_SOURCE_TYPE_LABELS, type EvidenceSourceType } from "@/lib/evidence-source";
 import { dispatchWorkspaceAiAttachEvidence } from "@/lib/workspace-evidence-ai-bridge";
 import { EvidenceBulkActionBar } from "@/components/evidence-bulk-action-bar";
+import { cn } from "@/lib/utils";
 
 export type DashboardEvidencePreviewRow = {
   id: string;
@@ -56,7 +58,6 @@ export function DashboardEvidencePreview({
   activeMarkerId?: string | null;
 }) {
   const [internalSelected, setInternalSelected] = useState<string[]>([]);
-  const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const selected = selectedIds ?? internalSelected;
   const updateSelected = (updater: (prev: string[]) => string[]) => {
     const next = updater(selected);
@@ -67,16 +68,24 @@ export function DashboardEvidencePreview({
     updateSelected((prev) => {
       if (checked) {
         if (prev.includes(id)) return prev;
-        if (prev.length >= 2) {
-          setSelectionNotice("Comparison supports up to 2 selected files on the dashboard.");
-          return prev;
-        }
-        setSelectionNotice(null);
         return [...prev, id];
       }
-      setSelectionNotice(null);
       return prev.filter((x) => x !== id);
     });
+  }
+
+  const visibleRowIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const visibleIdSet = useMemo(() => new Set(visibleRowIds), [visibleRowIds]);
+  const allVisibleSelected =
+    visibleRowIds.length > 0 && visibleRowIds.every((id) => selected.includes(id));
+
+  function toggleSelectAllVisible() {
+    if (visibleRowIds.length === 0) return;
+    if (allVisibleSelected) {
+      updateSelected((prev) => prev.filter((id) => !visibleIdSet.has(id)));
+    } else {
+      updateSelected((prev) => [...new Set([...prev, ...visibleRowIds])]);
+    }
   }
 
   const selectedRows = useMemo(() => rows.filter((r) => selected.includes(r.id)), [rows, selected]);
@@ -185,21 +194,28 @@ export function DashboardEvidencePreview({
           </div>
         ) : (
           <p className="rounded border border-slate-600/50 bg-slate-950/35 px-2 py-1 text-[11px] text-slate-400">
-            Select up to two rows for compare and bulk actions.
+            Select rows for timeline, map, and bulk actions. Compare opens when exactly two are selected.
           </p>
         )}
-        {selectionNotice ? (
-          <p className="rounded border border-amber-400/70 bg-amber-300/10 px-2 py-1 text-xs font-medium text-amber-100">
-            {selectionNotice}
-          </p>
-        ) : null}
         {!loading && rows.length === 0 ? (
           <div className="rounded-md border border-slate-600/50 bg-slate-950/40 px-3 py-4 text-sm text-slate-300">
             No evidence in this view.
           </div>
         ) : null}
         {!loading && rows.length > 0 ? (
-          <ul className="min-h-0 flex-1 divide-y divide-slate-600/50 overflow-y-auto rounded-md border border-slate-500/35 bg-slate-950/30 shadow-[inset_0_1px_0_rgba(125,211,252,0.04)]">
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 border-slate-500/60 bg-slate-900/50 px-2 text-[11px] text-slate-100"
+                onClick={toggleSelectAllVisible}
+              >
+                {allVisibleSelected ? "Clear All" : "Select All"}
+              </Button>
+            </div>
+            <ul className="min-h-0 flex-1 divide-y divide-slate-600/50 overflow-y-auto rounded-md border border-slate-500/35 bg-slate-950/30 shadow-[inset_0_1px_0_rgba(125,211,252,0.04)]">
             {rows.map((r) => {
               const href = r.case_id
                 ? `/cases/${r.case_id}/evidence/${r.id}`
@@ -216,6 +232,11 @@ export function DashboardEvidencePreview({
                 viewed: r.viewed,
                 hasContentDuplicatePeer: r.has_content_duplicate_peer,
               });
+              const needsReviewUnopened = evidenceRowNeedsReviewUnopened({
+                processingStatus: r.processing_status,
+                hasAiAnalysis: r.has_ai_analysis,
+                viewed: r.viewed,
+              });
               const sourceLabel =
                 (r.source_program && String(r.source_program).trim()) ||
                 (r.source_platform && String(r.source_platform).trim()) ||
@@ -225,11 +246,14 @@ export function DashboardEvidencePreview({
               return (
                 <li
                   key={r.id}
-                  className={`px-2.5 py-2 hover:bg-slate-800/40 ${
+                  className={cn(
+                    "px-2.5 py-2 hover:bg-slate-800/40",
                     checked || (activeEventId || activeMarkerId) && selected.includes(r.id)
                       ? "bg-sky-500/10 ring-1 ring-sky-400/35"
-                      : ""
-                  }`}
+                      : "",
+                    needsReviewUnopened &&
+                      "border-l-4 border-l-amber-400 bg-amber-500/[0.08] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.15)]",
+                  )}
                 >
                   <div className="flex items-start gap-2 md:grid md:grid-cols-[auto_auto_1fr] md:items-center md:gap-x-3">
                     <input
@@ -240,7 +264,7 @@ export function DashboardEvidencePreview({
                       aria-label={`Select ${primary} for dashboard actions`}
                     />
                     <span className="mt-1 shrink-0 md:mt-0">
-                      <EvidenceStatusBullets kinds={bullets} />
+                      <EvidenceStatusBullets kinds={bullets} emphasizeNeedsReviewUnopened={needsReviewUnopened} />
                     </span>
                     <Link href={href} className="block min-w-0">
                       <span className="block truncate text-sm font-medium text-slate-100">{primary}</span>
@@ -256,7 +280,8 @@ export function DashboardEvidencePreview({
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </div>
         ) : null}
       </CardContent>
     </Card>

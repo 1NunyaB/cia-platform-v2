@@ -6,12 +6,12 @@ ALTER TABLE public.cases DROP CONSTRAINT IF EXISTS cases_created_by_fkey;
 ALTER TABLE public.cases ALTER COLUMN created_by DROP NOT NULL;
 
 -- Notes / comments: optional profile link + display label for anonymous/local analyst
-ALTER TABLE public.notes DROP CONSTRAINT IF EXISTS notes_author_id_fkey;
-ALTER TABLE public.notes ALTER COLUMN author_id DROP NOT NULL;
+ALTER TABLE public.notes DROP CONSTRAINT IF EXISTS notes_user_id_fkey;
+ALTER TABLE public.notes ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS author_label text;
 
-ALTER TABLE public.comments DROP CONSTRAINT IF EXISTS comments_author_id_fkey;
-ALTER TABLE public.comments ALTER COLUMN author_id DROP NOT NULL;
+ALTER TABLE public.comments DROP CONSTRAINT IF EXISTS comments_user_id_fkey;
+ALTER TABLE public.comments ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE public.comments ADD COLUMN IF NOT EXISTS author_label text;
 
 -- Activity / contributions: optional actor

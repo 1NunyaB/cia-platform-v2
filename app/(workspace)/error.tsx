@@ -25,6 +25,7 @@ export default function WorkspaceError({
 }) {
   const pathname = usePathname();
   const caseId = useMemo(() => caseIdFromPathname(pathname), [pathname]);
+  const backHref = caseId ? `/cases/${caseId}` : "/cases";
 
   useEffect(() => {
     console.error(error);
@@ -51,15 +52,13 @@ export default function WorkspaceError({
           >
             Try again
           </Button>
-          {caseId ? (
-            <Button
-              asChild
-              variant="outline"
-              className="border-border text-foreground hover:bg-muted"
-            >
-              <Link href={`/cases/${caseId}`}>Back to case</Link>
-            </Button>
-          ) : null}
+          <Button
+            asChild
+            variant="outline"
+            className="border-border text-foreground hover:bg-muted"
+          >
+            <Link href={backHref}>Back to case</Link>
+          </Button>
         </div>
       </div>
     </div>

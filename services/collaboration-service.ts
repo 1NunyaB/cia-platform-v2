@@ -9,7 +9,7 @@ export type StickyNoteRow = {
   id: string;
   case_id: string;
   evidence_file_id: string;
-  author_id: string | null;
+  user_id: string | null;
   author_label: string | null;
   body: string;
   created_at: string;
@@ -18,7 +18,7 @@ export type StickyNoteRow = {
 export type StickyReplyRow = {
   id: string;
   sticky_note_id: string;
-  author_id: string | null;
+  user_id: string | null;
   author_label: string | null;
   body: string;
   created_at: string;
@@ -94,9 +94,9 @@ export async function listClusterAnalysesForCase(
 
 export type DashboardChatMessageRow = {
   id: string;
-  author_id: string | null;
-  author_label: string | null;
-  body: string;
+  user_id: string;
+  message: string;
+  role: string;
   created_at: string;
 };
 
@@ -116,7 +116,7 @@ export async function listRecentDashboardChat(
   const lim = Math.min(Math.max(limit, 1), 500);
   const { data, error } = await supabase
     .from("dashboard_chat_messages")
-    .select("id, author_id, author_label, body, created_at")
+    .select("id, user_id, author_label, body, created_at")
     .order("created_at", { ascending: false })
     .limit(lim);
   if (error) throw new Error(error.message);
@@ -140,7 +140,7 @@ export async function searchDashboardChat(
   }
   const { data, error } = await supabase
     .from("dashboard_chat_messages")
-    .select("id, author_id, author_label, body, created_at")
+    .select("id, user_id, author_label, body, created_at")
     .ilike("body", `%${safe}%`)
     .order("created_at", { ascending: false })
     .limit(lim);

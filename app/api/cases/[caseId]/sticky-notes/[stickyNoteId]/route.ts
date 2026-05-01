@@ -19,7 +19,7 @@ export async function DELETE(
 
   const { data: sn, error: fErr } = await supabase
     .from("evidence_sticky_notes")
-    .select("id, evidence_file_id, author_id")
+    .select("id, evidence_file_id, user_id")
     .eq("id", stickyNoteId)
     .eq("case_id", caseId)
     .maybeSingle();

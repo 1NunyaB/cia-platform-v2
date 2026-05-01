@@ -47,8 +47,10 @@ export default function EvidenceMapPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Evidence map</h1>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed" style={{ color: "#64748b" }}>
-          Static world view of <strong className="font-semibold text-slate-300">Location</strong>-folder evidence that has
-          saved coordinates. Pins appear automatically when latitude and longitude are set on the evidence detail page.
+          Static world view of <strong className="font-semibold text-slate-300">Location</strong>-folder evidence with
+          saved coordinates, and <strong className="font-semibold text-slate-300">incident</strong> locations when city
+          and state are saved and coordinates can be resolved. Evidence pins come from the evidence detail page; incident
+          pins sync when you save case details.
         </p>
       </div>
 
@@ -74,9 +76,8 @@ export default function EvidenceMapPage() {
             >
               <p className="font-medium text-slate-200">No pins yet</p>
               <p className="mt-2 text-xs leading-relaxed">
-                Upload or assign evidence to the <strong className="text-slate-300">Location</strong> image category, then
-                enter coordinates on the evidence detail page. Pins only appear when both latitude and longitude are
-                stored.
+                Add coordinates on location evidence, or save an incident with city and state on a case — pins appear
+                only when latitude and longitude are available (no approximate placement for unknown cities yet).
               </p>
               <Link
                 href="/evidence"

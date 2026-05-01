@@ -18,6 +18,8 @@ import {
 import { type EvidenceKind } from "@/lib/evidence-kind";
 import { EvidenceKindBadge } from "@/components/evidence-kind-badge";
 import { EvidenceBulkActionBar } from "@/components/evidence-bulk-action-bar";
+import { evidenceRowNeedsReviewUnopened } from "@/lib/evidence-row-needs";
+import { cn } from "@/lib/utils";
 
 export type EvidenceLibraryRow = EvidenceFile & {
   case_membership_count: number;
@@ -282,6 +284,11 @@ export function EvidenceLibraryClient({
                   viewed: r.viewed,
                   hasContentDuplicatePeer: r.has_content_duplicate_peer,
                 });
+                const needsReviewUnopened = evidenceRowNeedsReviewUnopened({
+                  processingStatus: r.processing_status as EvidenceProcessingStatus,
+                  hasAiAnalysis: r.has_ai_analysis,
+                  viewed: r.viewed,
+                });
                 const href = r.case_id ? `/cases/${r.case_id}/evidence/${r.id}` : `/evidence/${r.id}`;
                 const staged = r.id === compareA || r.id === compareB;
                 const id = r.id as string;
@@ -293,7 +300,12 @@ export function EvidenceLibraryClient({
                       ev.dataTransfer.setData(WORKSPACE_AI_DRAG_MIME, r.id);
                       ev.dataTransfer.effectAllowed = "copy";
                     }}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-panel px-3 py-2.5"
+                    className={cn(
+                      "flex flex-wrap items-center justify-between gap-2 rounded-md border bg-panel px-3 py-2.5",
+                      needsReviewUnopened
+                        ? "border-amber-400/50 border-l-4 border-l-amber-400 bg-amber-500/[0.06] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.12)]"
+                        : "border-border",
+                    )}
                   >
                     <div className="flex items-start gap-2.5 min-w-0">
                       {signedIn ? (
@@ -323,7 +335,7 @@ export function EvidenceLibraryClient({
                         ) : null}
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <EvidenceKindBadge row={r} />
-                          <EvidenceStatusBullets kinds={bullets} />
+                          <EvidenceStatusBullets kinds={bullets} emphasizeNeedsReviewUnopened={needsReviewUnopened} />
                         </div>
                       </div>
                     </div>

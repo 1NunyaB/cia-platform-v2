@@ -23,6 +23,26 @@ export type BulkEvidenceItemResult = {
   existing?: import("@/lib/evidence-upload-errors").DuplicateEvidenceMatch;
 };
 
+function classifyUploadFailureMessage(err: unknown): { status: number; message: string } {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  const msg = raw.toLowerCase();
+  if (
+    msg.includes("forbidden") ||
+    msg.includes("can_write_case") ||
+    msg.includes("row-level security policy") ||
+    msg.includes("permission denied")
+  ) {
+    if (msg.includes("storage") || msg.includes("object")) {
+      return { status: 403, message: "Not allowed to upload this file to storage for this case." };
+    }
+    if (msg.includes("evidence_files") || msg.includes("next_evidence_file_sequence")) {
+      return { status: 403, message: "Not allowed to attach evidence to this case." };
+    }
+    return { status: 403, message: "Not allowed to attach evidence to this case." };
+  }
+  return { status: 500, message: raw || "Upload failed" };
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ caseId: string }> },
@@ -43,6 +63,9 @@ export async function POST(
     return NextResponse.json({ error: "Invalid image_category" }, { status: 400 });
   }
   const source = parseEvidenceSourceFromFormData(formData);
+  const incidentEntryIdRaw = formData.get("incident_entry_id");
+  const incidentEntryId =
+    typeof incidentEntryIdRaw === "string" && incidentEntryIdRaw.trim() ? incidentEntryIdRaw.trim() : null;
   const requestedForceDuplicate =
     formData.get("force_duplicate") === "true" || formData.get("force_duplicate") === "1";
   const forceDuplicate =
@@ -58,6 +81,7 @@ export async function POST(
       try {
         const r = await ingestUploadedFile(supabase, {
           caseId,
+          incidentEntryId,
           userId: user.id,
           file,
           source,
@@ -99,6 +123,7 @@ export async function POST(
     try {
       const r = await ingestUploadedFile(supabase, {
         caseId,
+        incidentEntryId,
         userId: user.id,
         file: single,
         source,
@@ -120,9 +145,12 @@ export async function POST(
         const body = await buildDuplicateEvidenceResponse(supabase, e);
         return NextResponse.json(body, { status: 200 });
       }
-      const message = e instanceof Error ? e.message : "Upload failed";
-      const status = isClientSafeUploadError(e) ? 400 : 500;
-      return NextResponse.json({ error: message }, { status });
+      if (isClientSafeUploadError(e)) {
+        const message = e instanceof Error ? e.message : "Upload failed";
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+      const classified = classifyUploadFailureMessage(e);
+      return NextResponse.json({ error: classified.message }, { status: classified.status });
     }
   }
 

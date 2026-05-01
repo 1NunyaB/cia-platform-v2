@@ -553,6 +553,8 @@ export async function registerEvidenceFile(
     suggestedEvidenceKind?: EvidenceKind | null;
     /** Image analysis hub folder; must match `image_categories.name` when set. */
     imageCategory?: string | null;
+    /** Incident entry id from `cases.incident_entries[].id` for incident-level linkage. */
+    incidentEntryId?: string | null;
   },
 ) {
   const src = input.source;
@@ -626,6 +628,7 @@ export async function registerEvidenceFile(
           }
         : {}),
       ...(input.imageCategory ? { image_category: input.imageCategory } : {}),
+      ...(input.incidentEntryId?.trim() ? { incident_entry_id: input.incidentEntryId.trim() } : {}),
     })
     .select("id")
     .single();
@@ -755,6 +758,135 @@ export async function assignEvidenceToCase(
     .update({ case_id: input.caseId })
     .eq("id", input.evidenceId);
   if (updErr) throw new Error(updErr.message);
+
+  const { error: memUpsertErr } = await supabase.from("evidence_case_memberships").upsert(
+    { evidence_file_id: input.evidenceId, case_id: input.caseId },
+    { onConflict: "evidence_file_id,case_id" },
+  );
+  if (memUpsertErr && !isEvidenceCaseMembershipTableError(memUpsertErr)) {
+    console.warn("[evidence] evidence_case_memberships upsert after assign:", memUpsertErr.message);
+  }
+}
+
+/** All case ids this file is linked to: primary `case_id` plus junction rows. */
+export async function listEvidenceLinkedCaseIds(
+  supabase: AppSupabaseClient,
+  evidenceId: string,
+): Promise<string[]> {
+  const ids = new Set<string>();
+  const { data: row, error } = await supabase
+    .from("evidence_files")
+    .select("case_id")
+    .eq("id", evidenceId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const primary = row?.case_id as string | null | undefined;
+  if (primary) ids.add(primary);
+
+  const { data: memberships, error: mErr } = await supabase
+    .from("evidence_case_memberships")
+    .select("case_id")
+    .eq("evidence_file_id", evidenceId);
+  if (mErr) {
+    if (isEvidenceCaseMembershipTableError(mErr)) return [...ids];
+    throw new Error(mErr.message);
+  }
+  for (const m of memberships ?? []) {
+    ids.add(m.case_id as string);
+  }
+  return [...ids];
+}
+
+/**
+ * Link file to a case: if unassigned, sets primary case; otherwise adds a membership row only.
+ */
+export async function linkEvidenceToCaseIfNeeded(
+  supabase: AppSupabaseClient,
+  input: { evidenceId: string; targetCaseId: string; userId: string },
+): Promise<void> {
+  const linked = await listEvidenceLinkedCaseIds(supabase, input.evidenceId);
+  if (linked.includes(input.targetCaseId)) return;
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("evidence_files")
+    .select("case_id")
+    .eq("id", input.evidenceId)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!row) throw new Error("Evidence not found");
+
+  const cid = row.case_id as string | null;
+  if (cid == null) {
+    await assignEvidenceToCase(supabase, {
+      evidenceId: input.evidenceId,
+      caseId: input.targetCaseId,
+      userId: input.userId,
+    });
+  } else {
+    await linkEvidenceToAdditionalCase(supabase, {
+      evidenceId: input.evidenceId,
+      targetCaseId: input.targetCaseId,
+      userId: input.userId,
+    });
+  }
+}
+
+/** Remove one case link; promotes another membership to primary when the primary case is removed. */
+export async function unlinkEvidenceFromCase(
+  supabase: AppSupabaseClient,
+  input: { evidenceId: string; caseId: string },
+): Promise<void> {
+  const ev = await getEvidenceById(supabase, input.evidenceId);
+  if (!ev) throw new Error("Evidence not found");
+
+  const primary = (ev.case_id as string | null) ?? null;
+  const { data: memberships, error: mErr } = await supabase
+    .from("evidence_case_memberships")
+    .select("case_id")
+    .eq("evidence_file_id", input.evidenceId);
+
+  if (mErr && !isEvidenceCaseMembershipTableError(mErr)) {
+    throw new Error(mErr.message);
+  }
+
+  const memberCaseIds =
+    mErr && isEvidenceCaseMembershipTableError(mErr) ? [] : (memberships ?? []).map((m) => m.case_id as string);
+
+  const allLinked = new Set<string>(memberCaseIds);
+  if (primary) allLinked.add(primary);
+
+  if (!allLinked.has(input.caseId)) {
+    throw new Error("Evidence is not linked to that investigation.");
+  }
+
+  if (!mErr || !isEvidenceCaseMembershipTableError(mErr)) {
+    const { error: delErr } = await supabase
+      .from("evidence_case_memberships")
+      .delete()
+      .eq("evidence_file_id", input.evidenceId)
+      .eq("case_id", input.caseId);
+    if (delErr && !isEvidenceCaseMembershipTableError(delErr)) throw new Error(delErr.message);
+  }
+
+  if (primary === input.caseId) {
+    const remaining = memberCaseIds.filter((c) => c !== input.caseId);
+    const nextPrimary = remaining[0] ?? null;
+    const { error: updErr } = await supabase
+      .from("evidence_files")
+      .update({ case_id: nextPrimary })
+      .eq("id", input.evidenceId);
+    if (updErr) throw new Error(updErr.message);
+
+    if (nextPrimary && (!mErr || !isEvidenceCaseMembershipTableError(mErr))) {
+      const { error: insErr } = await supabase.from("evidence_case_memberships").upsert(
+        { evidence_file_id: input.evidenceId, case_id: nextPrimary },
+        { onConflict: "evidence_file_id,case_id" },
+      );
+      if (insErr && !isEvidenceCaseMembershipTableError(insErr)) {
+        console.warn("[evidence] membership upsert after primary promotion:", insErr.message);
+      }
+    }
+  }
 }
 
 /**
@@ -853,7 +985,8 @@ export async function listEvidenceForImageHub(
 }
 
 /**
- * Location map: evidence in the `location` image category with stored WGS84 coordinates.
+ * Location map: evidence in the `location` image category with stored WGS84 coordinates,
+ * plus incident pins from `case_incident_map_pins` when city/state resolved to coordinates.
  * RLS limits rows to what the caller can read.
  */
 export async function listLocationMapPinsForUser(supabase: AppSupabaseClient): Promise<LocationMapPinRow[]> {
@@ -870,7 +1003,30 @@ export async function listLocationMapPinsForUser(supabase: AppSupabaseClient): P
     const lon = Number(r.longitude);
     return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
   });
-  const caseIds = [...new Set(valid.map((r) => r.case_id).filter(Boolean))] as string[];
+
+  const { data: incidentPinRows, error: pinErr } = await supabase
+    .from("case_incident_map_pins")
+    .select("id, case_id, incident_entry_id, label, latitude, longitude")
+    .not("latitude", "is", null)
+    .not("longitude", "is", null);
+  if (pinErr) {
+    if (!pinErr.message.includes("does not exist") && !pinErr.message.includes("schema cache")) {
+      throw new Error(pinErr.message);
+    }
+  }
+
+  const incidentValid = (incidentPinRows ?? []).filter((r) => {
+    const lat = Number(r.latitude);
+    const lon = Number(r.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+  });
+
+  const caseIds = [
+    ...new Set([
+      ...valid.map((r) => r.case_id).filter(Boolean),
+      ...incidentValid.map((r) => r.case_id).filter(Boolean),
+    ]),
+  ] as string[];
   const caseTitles = new Map<string, string>();
   if (caseIds.length > 0) {
     const { data: caseRows, error: caseErr } = await supabase.from("cases").select("id, title").in("id", caseIds);
@@ -879,7 +1035,8 @@ export async function listLocationMapPinsForUser(supabase: AppSupabaseClient): P
       caseTitles.set(c.id as string, String((c.title as string | null) ?? "").trim() || "Untitled");
     }
   }
-  return valid.map((r) => {
+
+  const evidencePins: LocationMapPinRow[] = valid.map((r) => {
     const cid = (r.case_id as string | null) ?? null;
     const title =
       String((r.display_filename as string | null)?.trim() || "") ||
@@ -887,7 +1044,7 @@ export async function listLocationMapPinsForUser(supabase: AppSupabaseClient): P
       "Evidence";
     const href = cid ? `/cases/${cid}/evidence/${r.id as string}` : `/evidence/${r.id as string}`;
     return {
-      id: r.id as string,
+      id: `evidence:${r.id as string}`,
       href,
       title,
       shortAlias: (r.short_alias as string | null)?.trim() || null,
@@ -895,8 +1052,29 @@ export async function listLocationMapPinsForUser(supabase: AppSupabaseClient): P
       caseId: cid,
       latitude: Number(r.latitude),
       longitude: Number(r.longitude),
+      linkLabel: "Open evidence",
     };
   });
+
+  const incidentPins: LocationMapPinRow[] = incidentValid.map((r) => {
+    const cid = r.case_id as string;
+    const iid = String(r.incident_entry_id ?? "").trim();
+    const title = String(r.label ?? "").trim() || "Incident";
+    return {
+      id: `incident:${r.id as string}`,
+      href: `/cases/${cid}#incident-${iid}`,
+      title,
+      shortAlias: null,
+      caseTitle: caseTitles.get(cid) ?? null,
+      caseId: cid,
+      latitude: Number(r.latitude),
+      longitude: Number(r.longitude),
+      linkLabel: "Open case",
+      incidentEntryId: iid || null,
+    };
+  });
+
+  return [...evidencePins, ...incidentPins];
 }
 
 /** Membership counts for marker UI (multi-case). */
@@ -1124,4 +1302,30 @@ export async function getAiAnalysis(supabase: AppSupabaseClient, evidenceId: str
     .limit(1);
   if (error) throw new Error(error.message);
   return data?.[0] ?? null;
+}
+
+/**
+ * When case `incident_entries` shrinks, evidence rows still pointing at removed incident ids should not
+ * keep a stale `incident_entry_id` (avoids orphaned incident links in the UI).
+ */
+export async function clearEvidenceIncidentLinksNotInCaseSet(
+  supabase: AppSupabaseClient,
+  caseId: string,
+  validIncidentEntryIds: Set<string>,
+): Promise<void> {
+  const { data: rows, error } = await supabase
+    .from("evidence_files")
+    .select("id, incident_entry_id")
+    .eq("case_id", caseId)
+    .not("incident_entry_id", "is", null);
+  if (error) throw new Error(error.message);
+  const toClear = (rows ?? [])
+    .filter((r) => {
+      const iid = String(r.incident_entry_id ?? "").trim();
+      return iid.length > 0 && !validIncidentEntryIds.has(iid);
+    })
+    .map((r) => r.id as string);
+  if (toClear.length === 0) return;
+  const { error: upErr } = await supabase.from("evidence_files").update({ incident_entry_id: null }).in("id", toClear);
+  if (upErr) throw new Error(upErr.message);
 }

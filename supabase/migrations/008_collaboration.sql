@@ -14,7 +14,7 @@ create policy "Notes select" on public.notes for select using (
     select 1 from public.cases c
     where c.id = notes.case_id
     and (
-      (notes.visibility = 'private' and auth.uid() is not null and notes.author_id = auth.uid())
+      (notes.visibility = 'private' and auth.uid() is not null and notes.user_id = auth.uid())
       or (notes.visibility = 'shared_case' and auth.uid() is not null and public.is_case_member(c.id, auth.uid()))
       or (notes.visibility = 'public_case' and c.visibility = 'public')
     )
@@ -23,7 +23,7 @@ create policy "Notes select" on public.notes for select using (
 
 drop policy if exists "Notes insert" on public.notes;
 create policy "Notes insert" on public.notes for insert with check (
-  author_id = auth.uid()
+  user_id = auth.uid()
   and auth.uid() is not null
   and exists (
     select 1 from public.cases c
@@ -51,7 +51,7 @@ create table if not exists public.evidence_sticky_notes (
   id uuid primary key default gen_random_uuid(),
   case_id uuid not null references public.cases (id) on delete cascade,
   evidence_file_id uuid not null references public.evidence_files (id) on delete cascade,
-  author_id uuid references public.profiles (id) on delete set null,
+  user_id uuid references public.profiles (id) on delete set null,
   author_label text,
   body text not null check (char_length(body) <= 8000),
   created_at timestamptz not null default now(),
@@ -64,7 +64,7 @@ create index if not exists idx_sticky_notes_case on public.evidence_sticky_notes
 create table if not exists public.evidence_sticky_note_replies (
   id uuid primary key default gen_random_uuid(),
   sticky_note_id uuid not null references public.evidence_sticky_notes (id) on delete cascade,
-  author_id uuid references public.profiles (id) on delete set null,
+  user_id uuid references public.profiles (id) on delete set null,
   author_label text,
   body text not null check (char_length(body) <= 4000),
   created_at timestamptz not null default now()
@@ -84,7 +84,7 @@ create policy "sticky_notes select" on public.evidence_sticky_notes for select u
 );
 
 create policy "sticky_notes insert" on public.evidence_sticky_notes for insert with check (
-  author_id = auth.uid()
+  user_id = auth.uid()
   and exists (
     select 1 from public.cases c
     where c.id = evidence_sticky_notes.case_id
@@ -93,7 +93,7 @@ create policy "sticky_notes insert" on public.evidence_sticky_notes for insert w
 );
 
 create policy "sticky_notes delete" on public.evidence_sticky_notes for delete using (
-  author_id = auth.uid()
+  user_id = auth.uid()
 );
 
 create policy "sticky_replies select" on public.evidence_sticky_note_replies for select using (
@@ -106,7 +106,7 @@ create policy "sticky_replies select" on public.evidence_sticky_note_replies for
 );
 
 create policy "sticky_replies insert" on public.evidence_sticky_note_replies for insert with check (
-  author_id = auth.uid()
+  user_id = auth.uid()
   and exists (
     select 1 from public.evidence_sticky_notes sn
     join public.cases c on c.id = sn.case_id
@@ -116,7 +116,7 @@ create policy "sticky_replies insert" on public.evidence_sticky_note_replies for
 );
 
 create policy "sticky_replies delete" on public.evidence_sticky_note_replies for delete using (
-  author_id = auth.uid()
+  user_id = auth.uid()
 );
 
 -- ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ create policy "sticky_replies delete" on public.evidence_sticky_note_replies for
 -- ---------------------------------------------------------------------------
 create table if not exists public.dashboard_chat_messages (
   id uuid primary key default gen_random_uuid(),
-  author_id uuid references public.profiles (id) on delete set null,
+  user_id uuid references public.profiles (id) on delete set null,
   author_label text,
   body text not null check (char_length(body) <= 2000),
   created_at timestamptz not null default now()
@@ -148,7 +148,7 @@ create policy "dashboard_chat_messages select" on public.dashboard_chat_messages
 );
 
 create policy "dashboard_chat_messages insert" on public.dashboard_chat_messages for insert with check (
-  author_id = auth.uid()
+  user_id = auth.uid()
 );
 
 create policy "dashboard_chat_rate own" on public.dashboard_chat_rate_state for all using (user_id = auth.uid())

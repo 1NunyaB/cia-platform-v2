@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cisCaseForm, cisCasePage } from "@/lib/cis-case-page-shell";
 import { cn } from "@/lib/utils";
 
 const GROUP_ICONS = {
@@ -39,20 +40,20 @@ function basisLabel(b: CrossCaseSourceParsed["information_basis"]): string {
 function CrossCaseSourcesList({ sources }: { sources: CrossCaseSourceParsed[] }) {
   if (sources.length === 0) return null;
   return (
-    <div className="space-y-2 pt-1 border-t border-border">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
+    <div className="space-y-2 border-t border-[#1e2d42] pt-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
         Other public investigations (read-only)
       </p>
       <ul className="space-y-2">
         {sources.map((s, i) => (
           <li
             key={`${s.case_id}-${i}`}
-            className="rounded-md border border-border bg-muted/25 p-2.5 text-xs leading-snug"
+            className="rounded-md border border-[#1e2d42] bg-[#0f1623]/90 p-2.5 text-xs leading-snug text-slate-300"
           >
             <div className="flex flex-wrap items-center gap-2">
               <Link
                 href={`/cases/${s.case_id}`}
-                className="font-medium text-blue-800 underline-offset-2 hover:underline"
+                className="font-medium text-sky-400 underline-offset-2 hover:text-sky-300 hover:underline"
               >
                 {s.investigation_title}
               </Link>
@@ -70,7 +71,7 @@ function CrossCaseSourcesList({ sources }: { sources: CrossCaseSourceParsed[] })
                 {basisLabel(s.information_basis)}
               </span>
             </div>
-            <p className="mt-1.5 text-muted-foreground">{s.attribution}</p>
+            <p className="mt-1.5 text-slate-500">{s.attribution}</p>
           </li>
         ))}
       </ul>
@@ -274,15 +275,15 @@ export function InvestigationActionsPanel({
   }
 
   return (
-    <Card id="investigation-actions" className="border-border shadow-md">
-      <CardHeader className="border-b border-border pb-3">
+    <Card id="investigation-actions" className={cn(cisCasePage.panel)}>
+      <CardHeader className={cn("pb-3", cisCasePage.panelHeaderBorder)}>
         <div className="flex items-start gap-3">
-          <div className="rounded-md border border-border bg-panel p-2">
-            <LayoutList className="h-5 w-5 text-sky-600" aria-hidden />
+          <div className="rounded-md border border-[#1e2d42] bg-[#0f1623] p-2">
+            <LayoutList className="h-5 w-5 text-sky-400" aria-hidden />
           </div>
           <div>
-            <CardTitle className="text-lg tracking-tight">Investigation Actions</CardTitle>
-            <CardDescription className="text-muted-foreground text-sm mt-1">
+            <CardTitle className={cn(cisCasePage.cardTitle, "text-lg")}>Investigation Actions</CardTitle>
+            <CardDescription className={cn(cisCasePage.cardDescription, "mt-1 text-sm")}>
               Guided shortcuts — search, compare, analyze, and build. Structured AI uses the seven-field finding on each
               file. Coming Soon means the control is visible but the full workflow is not shipped yet.
             </CardDescription>
@@ -290,14 +291,14 @@ export function InvestigationActionsPanel({
         </div>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
-        <div className="rounded-lg border border-border bg-panel p-3 space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Quick find</p>
+        <div className="space-y-2 rounded-lg border border-[#1e2d42] bg-[#0f1623]/80 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Quick find</p>
           <div className="flex flex-col gap-2">
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Name, date, email, place, keyword…"
-              className="h-9 text-sm"
+              className={cn(cisCaseForm.control, "h-9")}
               aria-label="Quick search keywords for this case"
             />
             <div className="flex flex-wrap gap-2">
@@ -305,7 +306,7 @@ export function InvestigationActionsPanel({
                 type="button"
                 size="sm"
                 variant="secondary"
-                className="border-border bg-secondary text-secondary-foreground hover:bg-muted"
+                className={cisCasePage.secondaryBtn}
                 asChild
               >
                 <Link
@@ -318,13 +319,7 @@ export function InvestigationActionsPanel({
                   Entities
                 </Link>
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="border-border bg-secondary text-secondary-foreground hover:bg-muted"
-                asChild
-              >
+              <Button type="button" size="sm" variant="secondary" className={cisCasePage.secondaryBtn} asChild>
                 <Link
                   href={
                     q.trim()
@@ -339,19 +334,19 @@ export function InvestigationActionsPanel({
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-panel p-3 space-y-2">
+        <div className="space-y-2 rounded-lg border border-[#1e2d42] bg-[#0f1623]/80 p-3">
           <div className="flex items-start gap-2">
-            <div className="rounded-md border border-border bg-muted/40 p-1.5 shrink-0">
-              <Globe className="h-4 w-4 text-sky-500/90" aria-hidden />
+            <div className="shrink-0 rounded-md border border-[#1e2d42] bg-[#141e2e] p-1.5">
+              <Globe className="h-4 w-4 text-sky-400" aria-hidden />
             </div>
             <div className="min-w-0 flex-1 space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Cross-investigation intelligence
               </p>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="text-[11px] leading-relaxed text-slate-500">
                 Ask a question using this case plus read-only context from other{" "}
-                <span className="font-medium text-foreground">public</span> investigations (matched by keywords).
-                No private notes or restricted data. Nothing is copied between cases automatically.
+                <span className="font-medium text-slate-200">public</span> investigations (matched by keywords). No
+                private notes or restricted data. Nothing is copied between cases automatically.
               </p>
             </div>
           </div>
@@ -360,14 +355,14 @@ export function InvestigationActionsPanel({
             value={crossQuery}
             onChange={(e) => setCrossQuery(e.target.value)}
             placeholder="e.g. Have we seen similar timelines or weapons in other public cases?"
-            className="min-h-[72px] text-sm resize-y"
+            className={cn(cisCaseForm.control, "min-h-[72px] resize-y")}
             aria-label="Question for cross-investigation read-only assistant"
           />
           <Button
             type="button"
             size="sm"
             variant="secondary"
-            className="border-border"
+            className={cisCasePage.secondaryBtn}
             disabled={crossLoading}
             onClick={() => void runCrossCaseIntelligence()}
           >
@@ -381,42 +376,40 @@ export function InvestigationActionsPanel({
             )}
           </Button>
           {(crossFinding || crossError) && (
-            <div className="rounded-md border border-border bg-background/80 p-3 space-y-3 mt-1">
-              {crossError ? (
-                <p className="text-sm text-alert-foreground font-medium">{crossError}</p>
-              ) : null}
+            <div className="mt-1 space-y-3 rounded-md border border-[#1e2d42] bg-[#111827]/90 p-3">
+              {crossError ? <p className="text-sm font-medium text-red-400">{crossError}</p> : null}
               {crossFinding ? (
                 <>
                   <AnalysisFindingPanel finding={crossFinding} />
                   <CrossCaseSourcesList sources={crossSources} />
                   {shareSuggestion?.suggest === true ? (
-                    <div className="rounded-md border border-amber-900/35 bg-amber-950/20 p-3 space-y-2">
+                    <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-950/25 p-3">
                       <div className="flex items-start gap-2">
-                        <Share2 className="h-4 w-4 shrink-0 text-amber-200/90 mt-0.5" aria-hidden />
-                        <div className="space-y-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground">
+                        <Share2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-200/90" aria-hidden />
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-sm font-medium text-white">
                             This information may be useful to another investigation. Would you like to share it?
                           </p>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            This would create a <span className="font-medium text-foreground">proposal</span> to link{" "}
-                            <span className="text-foreground">{shareSuggestion.evidence_filename}</span> from the public
+                          <p className="text-[11px] leading-relaxed text-slate-500">
+                            This would create a <span className="font-medium text-slate-200">proposal</span> to link{" "}
+                            <span className="text-slate-200">{shareSuggestion.evidence_filename}</span> from the public
                             investigation{" "}
                             <Link
                               href={`/cases/${shareSuggestion.source_case_id}`}
-                              className="text-blue-800 font-medium underline underline-offset-2 hover:text-blue-950"
+                              className="font-medium text-sky-400 underline underline-offset-2 hover:text-sky-300"
                             >
                               (open case)
                             </Link>{" "}
-                            into <span className="font-medium text-foreground">this</span> investigation. No file is
-                            copied and nothing changes until a teammate accepts the proposal in Notifications.
+                            into <span className="font-medium text-slate-200">this</span> investigation. No file is copied
+                            and nothing changes until a teammate accepts the proposal in Notifications.
                           </p>
-                          <div className="text-[11px] space-y-1 pt-1 border-t border-border/60 mt-2">
+                          <div className="mt-2 space-y-1 border-t border-[#1e2d42]/80 pt-1 text-[11px]">
                             <p>
-                              <span className="font-medium text-foreground/90">What: </span>
+                              <span className="font-medium text-slate-300">What: </span>
                               {shareSuggestion.share_summary_what}
                             </p>
                             <p>
-                              <span className="font-medium text-foreground/90">Why relevant: </span>
+                              <span className="font-medium text-slate-300">Why relevant: </span>
                               {shareSuggestion.share_summary_why}
                             </p>
                           </div>
@@ -426,6 +419,7 @@ export function InvestigationActionsPanel({
                         <Button
                           type="button"
                           size="sm"
+                          className="border border-blue-600 bg-[#1e40af] text-white hover:bg-blue-600"
                           disabled={shareProposalBusy}
                           onClick={() => void submitEvidenceShareProposal(shareSuggestion)}
                         >
@@ -438,15 +432,14 @@ export function InvestigationActionsPanel({
                           type="button"
                           size="sm"
                           variant="secondary"
+                          className={cisCasePage.secondaryBtn}
                           disabled={shareProposalBusy}
                           onClick={() => setShareSuggestion({ suggest: false })}
                         >
                           No thanks
                         </Button>
                       </div>
-                      {shareProposalNote ? (
-                        <p className="text-xs text-muted-foreground pt-1">{shareProposalNote}</p>
-                      ) : null}
+                      {shareProposalNote ? <p className="pt-1 text-xs text-slate-500">{shareProposalNote}</p> : null}
                     </div>
                   ) : null}
                 </>
@@ -460,16 +453,16 @@ export function InvestigationActionsPanel({
           return (
             <details
               key={group.id}
-              className="group rounded-lg border border-border bg-panel open:bg-muted/40"
+              className="group rounded-lg border border-[#1e2d42] bg-[#0f1623]/70 open:bg-[#111827]/90"
               open={gi === 0}
             >
-              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
-                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-                <Icon className="h-4 w-4 shrink-0 text-sky-500/90" aria-hidden />
+              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-100 hover:bg-[#1a2335]/80 [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-90" />
+                <Icon className="h-4 w-4 shrink-0 text-sky-400" aria-hidden />
                 <span className="flex-1 text-left">{group.sectionTitle}</span>
               </summary>
-              <div className="space-y-1.5 border-t border-border px-3 pb-3 pt-0">
-                <p className="text-[11px] text-muted-foreground pt-2 pb-1">{group.sectionSubtitle}</p>
+              <div className="space-y-1.5 border-t border-[#1e2d42] px-3 pb-3 pt-0">
+                <p className="pb-1 pt-2 text-[11px] text-slate-500">{group.sectionSubtitle}</p>
                 <ul className="space-y-1.5">
                   {group.actions.map((item) => {
                     const href = resolveHref(caseId, item, searchContext);
@@ -486,13 +479,13 @@ export function InvestigationActionsPanel({
                             type="button"
                             disabled
                             title={title}
-                            className="flex min-h-[2.75rem] w-full cursor-not-allowed flex-col gap-0.5 rounded-md border border-border bg-muted/40 px-2 py-2 text-left opacity-75"
+                            className="flex min-h-[2.75rem] w-full cursor-not-allowed flex-col gap-0.5 rounded-md border border-[#1e2d42] bg-[#141e2e]/60 px-2 py-2 text-left opacity-75"
                           >
                             <span className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-medium text-muted-foreground">{item.label}</span>
+                              <span className="text-sm font-medium text-slate-500">{item.label}</span>
                               <StatusBadge status={item.status} />
                             </span>
-                            <span className="text-[11px] text-muted-foreground">{item.hover}</span>
+                            <span className="text-[11px] text-slate-600">{item.hover}</span>
                           </button>
                         ) : analysisKind ? (
                           <Button
@@ -503,21 +496,21 @@ export function InvestigationActionsPanel({
                             disabled={analysisBusy}
                             onClick={() => void runCaseAnalysis(analysisKind, item.label, item.caseAnalysisFallback)}
                             className={cn(
-                              "h-auto min-h-[2.75rem] w-full justify-start gap-2 py-2 px-2 text-left font-normal",
-                              "border border-transparent text-foreground hover:border-border hover:bg-muted",
+                              "h-auto min-h-[2.75rem] w-full justify-start gap-2 px-2 py-2 text-left font-normal",
+                              "border border-transparent text-slate-200 hover:border-[#334155] hover:bg-[#1a2335]",
                             )}
                           >
                             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                               <span className="flex items-center justify-between gap-2">
                                 <span className="text-sm font-medium leading-tight">{item.label}</span>
-                                <span className="flex items-center gap-1.5 shrink-0">
+                                <span className="flex shrink-0 items-center gap-1.5">
                                   {caseLoading === analysisKind ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-hidden />
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" aria-hidden />
                                   ) : null}
                                   <StatusBadge status={item.status} />
                                 </span>
                               </span>
-                              <span className="text-[11px] text-muted-foreground line-clamp-2">{item.hover}</span>
+                              <span className="line-clamp-2 text-[11px] text-slate-500">{item.hover}</span>
                             </span>
                           </Button>
                         ) : href ? (
@@ -525,8 +518,8 @@ export function InvestigationActionsPanel({
                             variant="ghost"
                             size="sm"
                             className={cn(
-                              "h-auto min-h-[2.75rem] w-full justify-start gap-2 py-2 px-2 text-left font-normal",
-                              "border border-transparent text-foreground hover:border-border hover:bg-muted",
+                              "h-auto min-h-[2.75rem] w-full justify-start gap-2 px-2 py-2 text-left font-normal",
+                              "border border-transparent text-slate-200 hover:border-[#334155] hover:bg-[#1a2335]",
                               noEvidenceHint && "opacity-90",
                             )}
                             asChild
@@ -537,7 +530,7 @@ export function InvestigationActionsPanel({
                                   <span className="text-sm font-medium leading-tight">{item.label}</span>
                                   <StatusBadge status={item.status} />
                                 </span>
-                                <span className="text-[11px] text-muted-foreground line-clamp-2">{item.hover}</span>
+                                <span className="line-clamp-2 text-[11px] text-slate-500">{item.hover}</span>
                               </span>
                             </Link>
                           </Button>
@@ -546,13 +539,13 @@ export function InvestigationActionsPanel({
                             type="button"
                             disabled
                             title={title}
-                            className="flex min-h-[2.75rem] w-full cursor-not-allowed flex-col gap-0.5 rounded-md border border-border bg-muted/40 px-2 py-2 text-left opacity-75"
+                            className="flex min-h-[2.75rem] w-full cursor-not-allowed flex-col gap-0.5 rounded-md border border-[#1e2d42] bg-[#141e2e]/60 px-2 py-2 text-left opacity-75"
                           >
                             <span className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-medium text-muted-foreground">{item.label}</span>
+                              <span className="text-sm font-medium text-slate-500">{item.label}</span>
                               <StatusBadge status={item.status} />
                             </span>
-                            <span className="text-[11px] text-muted-foreground">{item.hover}</span>
+                            <span className="text-[11px] text-slate-600">{item.hover}</span>
                           </button>
                         )}
                       </li>
@@ -565,16 +558,19 @@ export function InvestigationActionsPanel({
         })}
 
         {(caseFinding || caseError) && (
-          <div className="rounded-lg border border-border bg-panel p-3 space-y-3 mt-1">
+          <div className="mt-1 space-y-3 rounded-lg border border-[#1e2d42] bg-[#0f1623]/80 p-3">
             {caseResultLabel ? (
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{caseResultLabel}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{caseResultLabel}</p>
             ) : null}
             {caseError ? (
               <div className="space-y-1.5">
-                <p className="text-sm text-alert-foreground font-medium">{caseError}</p>
+                <p className="text-sm font-medium text-red-400">{caseError}</p>
                 {caseErrorFallbackHref ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    <Link href={caseErrorFallbackHref} className="text-blue-800 font-medium underline underline-offset-2 hover:text-blue-950">
+                  <p className="text-[11px] text-slate-500">
+                    <Link
+                      href={caseErrorFallbackHref}
+                      className="font-medium text-sky-400 underline underline-offset-2 hover:text-sky-300"
+                    >
                       Open related workspace
                     </Link>
                   </p>

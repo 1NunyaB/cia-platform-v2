@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useEffect, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useEffect, useTransition } from "react";
 import {
   TIMELINE_KIND_ACCENT,
   TIMELINE_KIND_BG,
@@ -26,9 +27,21 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { regenerateReconstructedTimelineAction } from "@/app/(workspace)/cases/[caseId]/timeline/timeline-actions";
+import {
+  addIncidentsToTimelineAction,
+  regenerateReconstructedTimelineAction,
+  setTimelineEventWorkflowAction,
+} from "@/app/(workspace)/cases/[caseId]/timeline/timeline-actions";
 import { clearTheoryPlacementAction, saveTheoryPlacementAction } from "@/app/(workspace)/cases/[caseId]/timeline/theory-actions";
-import { Layers, Microscope, Lightbulb, GitBranch, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export type WorkspaceTimelineEvent = {
   id: string;
@@ -54,6 +67,15 @@ export type CaseFileRef = {
   id: string;
   original_filename: string;
   created_at: string;
+};
+
+export type TimelineIncidentOption = {
+  id: string;
+  title: string;
+  description: string;
+  date: string | null;
+  year: number | null;
+  people: { name: string; role: string }[];
 };
 
 type WorkspaceMode = "view" | "theory" | "research" | "reconstructed";
@@ -192,6 +214,7 @@ export function CaseTimelineWorkspace({
   initialPlacements,
   initialSelectedLanes,
   caseFiles,
+  incidents = [],
 }: {
   caseId: string;
   caseTitle: string;
@@ -201,7 +224,9 @@ export function CaseTimelineWorkspace({
   initialPlacements: Record<string, string>;
   initialSelectedLanes: TimelineKind[];
   caseFiles?: CaseFileRef[];
+  incidents?: TimelineIncidentOption[];
 }) {
+  const router = useRouter();
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("view");
   const [placements, setPlacements] = useState(initialPlacements);
   const [selectedLanes, setSelectedLanes] = useState<Set<TimelineKind>>(
@@ -217,6 +242,10 @@ export function CaseTimelineWorkspace({
   });
   const [undatedMode, setUndatedMode] = useState(false);
   const [layoutView, setLayoutView] = useState<TimelineLayoutView>("list");
+  const [addIncidentsOpen, setAddIncidentsOpen] = useState(false);
+  const [selectedIncidentIds, setSelectedIncidentIds] = useState<Set<string>>(() => new Set());
+  const [incidentMode, setIncidentMode] = useState<"confirmed" | "theory" | "timeline_by_person">("confirmed");
+  const [personByIncidentId, setPersonByIncidentId] = useState<Record<string, string>>({});
 
   const [isPending, startTransition] = useTransition();
 
@@ -333,6 +362,22 @@ export function CaseTimelineWorkspace({
     return [...map.values()].sort((a, b) => a.filename.localeCompare(b.filename));
   }, [spanForEvidence, workspaceMode, caseFiles, sel, phase]);
 
+  const personOptions = useMemo(
+    () =>
+      [...new Set(incidents.flatMap((inc) => inc.people.map((p) => p.name.trim()).filter(Boolean)))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [incidents],
+  );
+  const linkedIncidentIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const ev of events) {
+      const src = ev.source_label?.trim() ?? "";
+      if (src.startsWith("Incident:")) set.add(src.slice("Incident:".length));
+    }
+    return set;
+  }, [events]);
+
   const toggleLane = (k: TimelineKind) => {
     setSelectedLanes((prev) => {
       const next = new Set(prev);
@@ -351,39 +396,49 @@ export function CaseTimelineWorkspace({
     setUndatedMode(false);
   };
 
+  const toggleIncidentSelection = (incidentId: string) => {
+    setSelectedIncidentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(incidentId)) next.delete(incidentId);
+      else next.add(incidentId);
+      return next;
+    });
+  };
+
+  const saveIncidentSelections = () => {
+    if (!selectedIncidentIds.size || !userId) return;
+    const payload = [...selectedIncidentIds].map((incidentId) => ({
+      incidentId,
+      mode: incidentMode,
+      personName: incidentMode === "timeline_by_person" ? personByIncidentId[incidentId] ?? null : null,
+    }));
+    const fd = new FormData();
+    fd.set("caseId", caseId);
+    fd.set("selections", JSON.stringify(payload));
+    startTransition(() => {
+      void addIncidentsToTimelineAction(fd).then(() => {
+        setAddIncidentsOpen(false);
+        setSelectedIncidentIds(new Set());
+        router.refresh();
+      });
+    });
+  };
+
   const breadcrumb = undatedMode
     ? "Undated events"
     : formatDrillBreadcrumb(sel) + (phase === "events" ? " → Events" : "");
-
-  const modeButtons: { id: WorkspaceMode; label: string; icon: ReactNode; hint: string }[] = [
-    { id: "view", label: "View", icon: <Layers className="size-3.5 opacity-80" />, hint: "Canonical dates; read-only." },
-    {
-      id: "theory",
-      label: "Theory",
-      icon: <Lightbulb className="size-3.5 opacity-80" />,
-      hint: "Hypothesis placements (T2–T3); T1 locked.",
-    },
-    {
-      id: "research",
-      label: "Research",
-      icon: <Microscope className="size-3.5 opacity-80" />,
-      hint: "Evidence density for the selected span.",
-    },
-    {
-      id: "reconstructed",
-      label: "Reconstructed",
-      icon: <GitBranch className="size-3.5 opacity-80" />,
-      hint: "System reconstructed lane; tier styling.",
-    },
-  ];
 
   return (
     <div className="space-y-6 max-w-7xl">
       <div>
         <p className="text-sm text-muted-foreground">
-          <Link href={`/cases/${caseId}`} className="hover:underline">
-            ← Case
-          </Link>
+          <button
+            type="button"
+            onClick={() => router.push(caseId ? `/cases/${caseId}` : "/cases")}
+            className="hover:underline"
+          >
+            ← Back to case
+          </button>
         </p>
         <h1 className="text-2xl font-semibold tracking-tight mt-2">Timeline workspace</h1>
         <p className="text-muted-foreground text-sm mt-1 max-w-2xl">
@@ -395,17 +450,49 @@ export function CaseTimelineWorkspace({
       <div className="flex flex-wrap gap-2">
         {(
           [
-            { id: "list" as const, label: "First one" },
-            { id: "lanes" as const, label: "Second one" },
-            { id: "spine" as const, label: "Third one" },
+            {
+              id: "confirmed" as const,
+              label: "Confirmed",
+              onClick: () => {
+                setWorkspaceMode("view");
+                setLayoutView("list");
+                setSelectedLanes(new Set(KIND_ORDER));
+                resetDrill();
+              },
+            },
+            {
+              id: "theory" as const,
+              label: "Theory",
+              onClick: () => {
+                setWorkspaceMode("theory");
+                setLayoutView("list");
+                setSelectedLanes(new Set(KIND_ORDER));
+                resetDrill();
+              },
+            },
+            {
+              id: "timeline_by_person" as const,
+              label: "Timeline by Person",
+              onClick: () => {
+                setWorkspaceMode("view");
+                setLayoutView("lanes");
+                setSelectedLanes(new Set(["witness", "subject_actor", "custom"]));
+                resetDrill();
+              },
+            },
           ] as const
         ).map((opt) => (
           <button
             key={opt.id}
             type="button"
-            onClick={() => setLayoutView(opt.id)}
+            onClick={opt.onClick}
             className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
-              layoutView === opt.id
+              (opt.id === "theory" && workspaceMode === "theory") ||
+              (opt.id === "timeline_by_person" &&
+                workspaceMode === "view" &&
+                layoutView === "lanes" &&
+                selectedLanes.has("custom")) ||
+              (opt.id === "confirmed" && workspaceMode === "view" && layoutView === "list")
                 ? "border-foreground/30 bg-foreground/10 text-foreground"
                 : "border-border text-muted-foreground hover:bg-muted"
             }`}
@@ -413,35 +500,17 @@ export function CaseTimelineWorkspace({
             {opt.label}
           </button>
         ))}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setAddIncidentsOpen(true)}
+          disabled={!userId || incidents.length === 0}
+          className="text-xs"
+        >
+          Add from incidents
+        </Button>
       </div>
-
-      <div className="flex flex-wrap gap-2">
-        {modeButtons.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => {
-              setWorkspaceMode(m.id);
-              if (m.id === "reconstructed") {
-                setSelectedLanes(new Set(["reconstructed"]));
-              }
-              resetDrill();
-            }}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
-              workspaceMode === m.id
-                ? "border-foreground/30 bg-foreground/10 text-foreground"
-                : "border-border text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            {m.icon}
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      <p className="text-xs text-muted-foreground border border-border rounded-md px-3 py-2 bg-panel">
-        {modeButtons.find((x) => x.id === workspaceMode)?.hint}
-      </p>
 
       {workspaceMode !== "reconstructed" ? (
         <div className="space-y-2">
@@ -474,6 +543,108 @@ export function CaseTimelineWorkspace({
           </Button>
         </form>
       ) : null}
+
+      <Dialog open={addIncidentsOpen} onOpenChange={setAddIncidentsOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add incidents to timeline</DialogTitle>
+            <DialogDescription>
+              Select one or more incidents and save them directly to the timeline. Existing linked incidents are updated.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { id: "confirmed", label: "Confirmed" },
+                  { id: "theory", label: "Theory" },
+                  { id: "timeline_by_person", label: "Timeline by Person" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setIncidentMode(opt.id)}
+                  className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
+                    incidentMode === opt.id
+                      ? "border-foreground/30 bg-foreground/10 text-foreground"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {incidents.map((inc) => {
+              const checked = selectedIncidentIds.has(inc.id);
+              const alreadyLinked = linkedIncidentIds.has(inc.id);
+              return (
+                <label key={inc.id} className="block rounded-md border border-border bg-panel/30 p-3">
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4"
+                      checked={checked}
+                      onChange={() => toggleIncidentSelection(inc.id)}
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground">
+                        {inc.title.trim() || "Untitled incident"}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                        {inc.date ? `Date: ${inc.date}` : inc.year != null ? `Approx year: ${inc.year}` : "No date set"}
+                        {alreadyLinked ? (
+                          <span className="rounded border border-emerald-400/50 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                            Already on timeline (will update)
+                          </span>
+                        ) : null}
+                      </div>
+                      {inc.description.trim() ? (
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{inc.description}</p>
+                      ) : null}
+                      {incidentMode === "timeline_by_person" && checked ? (
+                        <select
+                          className="mt-2 w-full rounded-md border border-input bg-form-field px-2 py-1 text-xs text-form-field-foreground"
+                          value={personByIncidentId[inc.id] ?? ""}
+                          onChange={(e) =>
+                            setPersonByIncidentId((prev) => ({
+                              ...prev,
+                              [inc.id]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Person timeline (generic)</option>
+                          {inc.people
+                            .map((p) => p.name.trim())
+                            .filter(Boolean)
+                            .filter((name, i, arr) => arr.indexOf(name) === i)
+                            .map((name) => (
+                              <option key={`${inc.id}-${name}`} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                        </select>
+                      ) : null}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddIncidentsOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={saveIncidentSelections}
+              disabled={!userId || selectedIncidentIds.size === 0 || isPending}
+            >
+              Save to timeline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {conflicts.length > 0 ? (
         <Alert className="border-amber-500/40 bg-amber-500/[0.06]">
@@ -509,6 +680,7 @@ export function CaseTimelineWorkspace({
               <EventList
                 caseId={caseId}
                 events={drillFiltered}
+                personOptions={personOptions}
                 workspaceMode={workspaceMode}
                 placements={placements}
                 useTheoryPlacement={useTheoryPlacement}
@@ -598,6 +770,7 @@ export function CaseTimelineWorkspace({
               <EventList
                 caseId={caseId}
                 events={drillFiltered}
+                personOptions={personOptions}
                 workspaceMode={workspaceMode}
                 placements={placements}
                 useTheoryPlacement={useTheoryPlacement}
@@ -628,6 +801,7 @@ export function CaseTimelineWorkspace({
             <TimelineLanesView
               eventsByLane={eventsByLaneLabel}
               caseId={caseId}
+              personOptions={personOptions}
               workspaceMode={workspaceMode}
               placements={placements}
               useTheoryPlacement={useTheoryPlacement}
@@ -660,6 +834,7 @@ export function CaseTimelineWorkspace({
               <EventList
                 caseId={caseId}
                 events={spineSortedEvents}
+                personOptions={personOptions}
                 workspaceMode={workspaceMode}
                 placements={placements}
                 useTheoryPlacement={useTheoryPlacement}
@@ -863,6 +1038,7 @@ function DayRow({
 function TimelineEventCard({
   caseId,
   ev,
+  personOptions,
   workspaceMode,
   placements,
   useTheoryPlacement,
@@ -874,6 +1050,7 @@ function TimelineEventCard({
 }: {
   caseId: string;
   ev: WorkspaceTimelineEvent;
+  personOptions: string[];
   workspaceMode: WorkspaceMode;
   placements: Record<string, string>;
   useTheoryPlacement: boolean;
@@ -890,6 +1067,21 @@ function TimelineEventCard({
   const canTheoryMove = !locked && (tier === "t2_supported" || tier === "t3_leads");
   const showCorr = workspaceMode === "reconstructed" && isCorrelated(ev);
   const hypVal = placements[ev.id] ? new Date(placements[ev.id]).toISOString().slice(0, 16) : "";
+  const [personSelection, setPersonSelection] = useState("");
+
+  const setWorkflow = (mode: "confirmed" | "theory" | "timeline_by_person") => {
+    if (!userId) return;
+    const fd = new FormData();
+    fd.set("caseId", caseId);
+    fd.set("eventId", ev.id);
+    fd.set("mode", mode);
+    if (mode === "timeline_by_person" && personSelection.trim()) {
+      fd.set("personName", personSelection.trim());
+    }
+    startTransition(() => {
+      void setTimelineEventWorkflowAction(fd);
+    });
+  };
 
   const saveHyp = () => {
     const el = document.getElementById(`hyp-${ev.id}`) as HTMLInputElement | null;
@@ -963,6 +1155,37 @@ function TimelineEventCard({
         </div>
       ) : null}
 
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <Button type="button" size="sm" variant="secondary" disabled={!userId || isPending} onClick={() => setWorkflow("confirmed")}>
+          Confirmed
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={!userId || isPending} onClick={() => setWorkflow("theory")}>
+          Theory
+        </Button>
+        <select
+          className="h-8 min-w-[9rem] rounded-md border border-input bg-form-field px-2 text-xs text-form-field-foreground"
+          value={personSelection}
+          onChange={(e) => setPersonSelection(e.target.value)}
+          disabled={!userId || isPending}
+        >
+          <option value="">Person (optional)</option>
+          {personOptions.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={!userId || isPending}
+          onClick={() => setWorkflow("timeline_by_person")}
+        >
+          Timeline by Person
+        </Button>
+      </div>
+
       {workspaceMode === "theory" && placements[ev.id] ? (
         <p className="mt-1 text-[11px] text-amber-900">
           Hypothesis placement: {new Date(placements[ev.id]).toLocaleString()}
@@ -987,6 +1210,7 @@ function TimelineEventCard({
 function TimelineLanesView({
   eventsByLane,
   caseId,
+  personOptions,
   workspaceMode,
   placements,
   useTheoryPlacement,
@@ -998,6 +1222,7 @@ function TimelineLanesView({
 }: {
   eventsByLane: Map<string, WorkspaceTimelineEvent[]>;
   caseId: string;
+  personOptions: string[];
   workspaceMode: WorkspaceMode;
   placements: Record<string, string>;
   useTheoryPlacement: boolean;
@@ -1024,6 +1249,7 @@ function TimelineLanesView({
                 <TimelineEventCard
                   caseId={caseId}
                   ev={ev}
+                  personOptions={personOptions}
                   workspaceMode={workspaceMode}
                   placements={placements}
                   useTheoryPlacement={useTheoryPlacement}
@@ -1045,6 +1271,7 @@ function TimelineLanesView({
 function EventList({
   caseId,
   events,
+  personOptions,
   workspaceMode,
   placements,
   useTheoryPlacement,
@@ -1056,6 +1283,7 @@ function EventList({
 }: {
   caseId: string;
   events: WorkspaceTimelineEvent[];
+  personOptions: string[];
   workspaceMode: WorkspaceMode;
   placements: Record<string, string>;
   useTheoryPlacement: boolean;
@@ -1078,6 +1306,7 @@ function EventList({
           <TimelineEventCard
             caseId={caseId}
             ev={ev}
+            personOptions={personOptions}
             workspaceMode={workspaceMode}
             placements={placements}
             useTheoryPlacement={useTheoryPlacement}

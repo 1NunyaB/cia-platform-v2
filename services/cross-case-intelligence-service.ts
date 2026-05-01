@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { caseDirectorySearchBlob, formatCaseDirectoryForPrompt } from "@/lib/case-directory";
 import type { AppSupabaseClient } from "@/types";
 import type { CaseRow } from "@/types";
 import { assertCrossCaseUserMessageShape } from "@/lib/ai-privacy-enforcement";
@@ -29,18 +30,7 @@ function relevanceScore(row: CaseRow, query: string): number {
     .split(/\s+/)
     .filter((w) => w.length > 2);
   if (words.length === 0) return 0;
-  const blob = [
-    row.title,
-    row.description ?? "",
-    row.accused_label ?? "",
-    row.victim_labels ?? "",
-    row.incident_city ?? "",
-    row.incident_state ?? "",
-    row.known_weapon ?? "",
-    row.incident_year != null ? String(row.incident_year) : "",
-  ]
-    .join(" ")
-    .toLowerCase();
+  const blob = caseDirectorySearchBlob(row).toLowerCase();
   let s = 0;
   for (const w of words) {
     if (blob.includes(w)) s += 2;
@@ -95,11 +85,12 @@ export async function runCrossCaseIntelligenceQuery(
       maxFiles: OTHER_MAX_FILES,
       maxCharsPerFile: OTHER_MAX_CHARS,
     });
+    const directoryBlock = formatCaseDirectoryForPrompt(row);
     const publicPreamble = `--- OTHER PUBLIC INVESTIGATION (directory-visible metadata + shared evidence extracts) ---
 TITLE: ${row.title}
 CASE_ID: ${row.id}
 PUBLIC_DESCRIPTION (may be empty): ${(row.description ?? "").slice(0, 1200)}${(row.description ?? "").length > 1200 ? "…" : ""}
-${row.incident_year != null ? `INCIDENT_YEAR: ${row.incident_year}\n` : ""}${row.incident_city?.trim() ? `CITY: ${row.incident_city.trim()}\n` : ""}${row.incident_state?.trim() ? `STATE/REGION: ${row.incident_state.trim()}\n` : ""}${row.accused_label?.trim() ? `ACCUSED_LABEL (directory): ${row.accused_label.trim()}\n` : ""}${row.victim_labels?.trim() ? `VICTIM_LABELS (directory): ${row.victim_labels.trim()}\n` : ""}${row.known_weapon?.trim() ? `KNOWN_WEAPON (directory): ${row.known_weapon.trim()}\n` : ""}
+${directoryBlock ? `${directoryBlock}\n` : ""}
 `;
     otherBlocks.push(`${publicPreamble}\n${slim.userContent}`);
   }

@@ -1,8 +1,16 @@
+import type { CaseDirectoryPayload } from "@/lib/case-directory";
+import {
+  deriveLegacyFromDirectory,
+  flattenIncidentEntries,
+  legacyArraysFromPeople,
+  normalizeCaseDirectoryPayload,
+} from "@/lib/case-directory";
 import type { AppSupabaseClient, CaseRow, CaseMemberRole } from "@/types";
 import type { CaseListFilters } from "@/lib/case-list-filters";
 import { filterCasesByMetadata } from "@/lib/case-list-filters";
 import { normalizeCaseTitle } from "@/lib/case-title";
 import { logActivity } from "@/services/activity-service";
+import { syncCaseIncidentMapPins } from "@/services/case-incident-map-pins-service";
 import { recordContribution } from "@/services/contributions-service";
 
 /** New investigations are always shared (public listing). */
@@ -19,14 +27,15 @@ export async function createCase(
     userId: string;
     title: string;
     description?: string | null;
-    incident_year?: number | null;
-    incident_city?: string | null;
-    incident_state?: string | null;
-    accused_label?: string | null;
-    victim_labels?: string | null;
-    known_weapon?: string | null;
-  },
+  } & CaseDirectoryPayload,
 ) {
+  const norm = normalizeCaseDirectoryPayload({
+    incident_entries: input.incident_entries,
+  });
+  const flat = flattenIncidentEntries(norm.incident_entries);
+  const legacy = deriveLegacyFromDirectory(norm);
+  const { case_victims, case_accused } = legacyArraysFromPeople(flat.people);
+
   const { data: created, error } = await supabase
     .from("cases")
     .insert({
@@ -34,18 +43,34 @@ export async function createCase(
       description: input.description ?? null,
       visibility: NEW_CASE_VISIBILITY,
       created_by: input.userId,
-      incident_year: input.incident_year ?? null,
-      incident_city: emptyToNull(input.incident_city ?? undefined),
-      incident_state: emptyToNull(input.incident_state ?? undefined),
-      accused_label: emptyToNull(input.accused_label ?? undefined),
-      victim_labels: emptyToNull(input.victim_labels ?? undefined),
-      known_weapon: emptyToNull(input.known_weapon ?? undefined),
+      incident_entries: norm.incident_entries,
+      incidents: flat.incidents,
+      case_people: flat.people,
+      case_victims,
+      case_accused,
+      legal_milestones: flat.legal_milestones,
+      evidence_file_entries: flat.evidence_file_entries,
+      charges: emptyToNull(flat.charges || undefined),
+      incident_year: legacy.incident_year,
+      incident_city: legacy.incident_city,
+      incident_state: legacy.incident_state,
+      accused_label: legacy.accused_label,
+      victim_labels: legacy.victim_labels,
+      indictment_month_year: legacy.indictment_month_year,
+      conviction_month_year: legacy.conviction_month_year,
+      sentence: legacy.sentence,
     })
     .select("id")
     .single();
 
   if (error) throw new Error(error.message);
   const caseId = created!.id as string;
+
+  try {
+    await syncCaseIncidentMapPins(supabase, caseId, norm.incident_entries);
+  } catch (e) {
+    console.warn("[case-incident-map-pins] sync after create failed:", e instanceof Error ? e.message : e);
+  }
 
   await logActivity(supabase, {
     caseId,

@@ -6,9 +6,12 @@ import {
 export function EvidenceStatusBullets({
   kinds,
   compact = false,
+  emphasizeNeedsReviewUnopened = false,
 }: {
   kinds: EvidenceStatusBulletKind[];
   compact?: boolean;
+  /** Stronger “Needs reviewing” styling when the file has not been opened yet (triage cue, not an error). */
+  emphasizeNeedsReviewUnopened?: boolean;
 }) {
   if (kinds.length === 0) return null;
   return (
@@ -19,12 +22,17 @@ export function EvidenceStatusBullets({
     >
       {kinds.map((k) => {
         const meta = EVIDENCE_STATUS_BULLET_STYLES[k];
+        const needsReviewPop = emphasizeNeedsReviewUnopened && k === "needs_analysis";
         return (
           <span
             key={k}
-            className={`inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 ${
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
               compact ? "text-[10px]" : "text-[11px]"
-            } font-medium text-foreground`}
+            } font-medium ${
+              needsReviewPop
+                ? "border-amber-400/80 bg-amber-500/15 text-amber-950 ring-1 ring-amber-400/50 dark:text-amber-50"
+                : "border-border bg-card text-foreground"
+            }`}
             title={meta.label}
             aria-label={meta.label}
           >

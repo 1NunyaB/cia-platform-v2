@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { parseIncidentEntries } from "@/lib/case-directory";
 import { getCaseById } from "@/services/case-service";
 import { normalizeTimelineKind } from "@/lib/timeline-kind-schema";
 import { detectTimelineConflicts } from "@/lib/timeline-conflicts";
 import { listTheoryPlacementsForUser } from "@/services/timeline-theory-service";
 import { logActivity } from "@/services/activity-service";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { TimelineKind } from "@/types/analysis";
 import {
   CaseTimelineWorkspace,
@@ -23,6 +25,20 @@ const KIND_ORDER: TimelineKind[] = [
 ];
 
 type TimelineRow = WorkspaceTimelineEvent;
+type TimelineEvidenceRow = {
+  timeline_event_id: string;
+  evidence_file_id: string;
+  evidence_files: { id: string; original_filename: string } | null;
+};
+type TimelineBaseRow = Omit<TimelineRow, "timeline_event_evidence">;
+type TimelineIncidentOption = {
+  id: string;
+  title: string;
+  description: string;
+  date: string | null;
+  year: number | null;
+  people: { name: string; role: string }[];
+};
 
 function parseKind(raw: string | undefined): TimelineKind {
   if (!raw || raw === "all") return "evidence";
@@ -95,7 +111,10 @@ export default async function CaseTimelinePage({
         ? [primaryKind as TimelineKind, effectiveCompare]
         : [primaryKind as TimelineKind];
 
-  const { data: events, error } = await supabase
+  let timelineEventsWarning: string | null = null;
+  let eventRows: TimelineBaseRow[] = [];
+
+  const { data: eventsWithOptionalCols, error: eventsWithOptionalColsError } = await supabase
     .from("timeline_events")
     .select(
       `
@@ -111,19 +130,96 @@ export default async function CaseTimelinePage({
       event_classification,
       event_reasoning,
       event_limitations,
-      authenticity_label,
-      timeline_event_evidence (
-        evidence_file_id,
-        evidence_files ( id, original_filename )
-      )
+      authenticity_label
     `,
     )
     .eq("case_id", caseId)
     .order("occurred_at", { ascending: true, nullsFirst: false });
 
-  if (error) throw new Error(error.message);
+  if (eventsWithOptionalColsError) {
+    const { data: eventsMinimal, error: eventsMinimalError } = await supabase
+      .from("timeline_events")
+      .select(
+        `
+        id,
+        title,
+        summary,
+        occurred_at,
+        evidence_file_id,
+        timeline_kind,
+        custom_lane_label,
+        source_label,
+        event_classification,
+        event_reasoning,
+        event_limitations,
+        authenticity_label
+      `,
+      )
+      .eq("case_id", caseId)
+      .order("occurred_at", { ascending: true, nullsFirst: false });
 
-  const rawList = (events ?? []) as unknown as TimelineRow[];
+    if (eventsMinimalError) {
+      timelineEventsWarning = "Some timeline data could not be loaded. Showing available events only.";
+      eventRows = [];
+    } else {
+      timelineEventsWarning = "Some timeline fields are unavailable. Showing compatible event data.";
+      eventRows = (eventsMinimal ?? []).map((row) => ({
+        ...(row as unknown as Omit<TimelineBaseRow, "timeline_tier">),
+        timeline_tier: null,
+      })) as TimelineBaseRow[];
+    }
+  } else {
+    eventRows = (eventsWithOptionalCols ?? []) as unknown as TimelineBaseRow[];
+  }
+
+  const eventIds = eventRows.map((row) => row.id);
+  let timelineEvidenceWarning: string | null = null;
+  let evidenceByEvent = new Map<string, TimelineRow["timeline_event_evidence"]>();
+
+  if (eventIds.length > 0) {
+    const { data: timelineEvidenceRows, error: timelineEvidenceError } = await supabase
+      .from("timeline_event_evidence")
+      .select(
+        `
+        timeline_event_id,
+        evidence_file_id,
+        evidence_files ( id, original_filename )
+      `,
+      )
+      .in("timeline_event_id", eventIds);
+
+    if (timelineEvidenceError) {
+      timelineEvidenceWarning = "Linked evidence is temporarily unavailable. Timeline events are shown without attachments.";
+    } else {
+      evidenceByEvent = (timelineEvidenceRows ?? []).reduce((map, row) => {
+        const typedRow = row as unknown as TimelineEvidenceRow;
+        const existing = map.get(typedRow.timeline_event_id) ?? [];
+        existing.push({
+          evidence_file_id: typedRow.evidence_file_id,
+          evidence_files: typedRow.evidence_files,
+        });
+        map.set(typedRow.timeline_event_id, existing);
+        return map;
+      }, new Map<string, TimelineRow["timeline_event_evidence"]>());
+    }
+  }
+
+  const rawList: TimelineRow[] = eventRows.map((row) => ({
+    id: row.id,
+    title: row.title ?? "Untitled event",
+    summary: row.summary ?? null,
+    occurred_at: row.occurred_at ?? null,
+    evidence_file_id: row.evidence_file_id ?? null,
+    timeline_tier: row.timeline_tier ?? null,
+    timeline_kind: row.timeline_kind ?? null,
+    custom_lane_label: row.custom_lane_label ?? null,
+    source_label: row.source_label ?? null,
+    event_classification: row.event_classification ?? null,
+    event_reasoning: row.event_reasoning ?? null,
+    event_limitations: row.event_limitations ?? null,
+    authenticity_label: row.authenticity_label ?? null,
+    timeline_event_evidence: evidenceByEvent.get(row.id) ?? [],
+  }));
   const needle = (q ?? "").trim().toLowerCase();
   let timelineFiltered = needle
     ? rawList.filter((ev) => {
@@ -190,8 +286,31 @@ export default async function CaseTimelinePage({
     created_at: r.created_at as string,
   }));
 
+  const incidents: TimelineIncidentOption[] = parseIncidentEntries(
+    (c as { incident_entries?: unknown }).incident_entries,
+  ).map((e) => ({
+    id: e.id,
+    title: e.incident_title,
+    description: e.description,
+    date: e.date ?? null,
+    year: e.year ?? null,
+    people: e.people.map((p) => ({ name: p.name, role: p.role })),
+  }));
+
   return (
     <div className="space-y-4">
+      {timelineEventsWarning ? (
+        <Alert className="border-amber-500/40 bg-amber-500/[0.06]">
+          <AlertTitle className="text-sm">Timeline data warning</AlertTitle>
+          <AlertDescription>{timelineEventsWarning}</AlertDescription>
+        </Alert>
+      ) : null}
+      {timelineEvidenceWarning ? (
+        <Alert className="border-amber-500/40 bg-amber-500/[0.06]">
+          <AlertTitle className="text-sm">Evidence link warning</AlertTitle>
+          <AlertDescription>{timelineEvidenceWarning}</AlertDescription>
+        </Alert>
+      ) : null}
       {needle ? (
         <p className="text-sm text-muted-foreground max-w-7xl">
           Filtered by search: “{q?.trim()}” —{" "}
@@ -210,6 +329,7 @@ export default async function CaseTimelinePage({
         initialPlacements={placements}
         initialSelectedLanes={initialSelectedLanes}
         caseFiles={caseFiles}
+        incidents={incidents}
       />
     </div>
   );

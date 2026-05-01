@@ -4,8 +4,17 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-export function PutOnHoldButton({ caseId, disabled = false }: { caseId: string; disabled?: boolean }) {
+export function PutOnHoldButton({
+  caseId,
+  disabled = false,
+  className,
+}: {
+  caseId: string;
+  disabled?: boolean;
+  className?: string;
+}) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -16,7 +25,7 @@ export function PutOnHoldButton({ caseId, disabled = false }: { caseId: string; 
         type="button"
         size="sm"
         variant="outline"
-        className="h-8"
+        className={cn("h-8", className)}
         disabled={disabled || loading}
         onClick={async () => {
           setLoading(true);
@@ -47,7 +56,7 @@ export function PutOnHoldButton({ caseId, disabled = false }: { caseId: string; 
           "Put on Hold"
         )}
       </Button>
-      {message ? <p className="max-w-[18rem] text-[10px] text-muted-foreground">{message}</p> : null}
+      {message ? <p className="max-w-[18rem] text-[10px] text-slate-400">{message}</p> : null}
     </div>
   );
 }

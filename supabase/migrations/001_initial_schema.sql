@@ -162,7 +162,7 @@ create table if not exists public.notes (
   id uuid primary key default gen_random_uuid(),
   case_id uuid not null references public.cases (id) on delete cascade,
   evidence_file_id uuid references public.evidence_files (id) on delete cascade,
-  author_id uuid not null references public.profiles (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
   body text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -173,7 +173,7 @@ create table if not exists public.comments (
   case_id uuid not null references public.cases (id) on delete cascade,
   evidence_file_id uuid references public.evidence_files (id) on delete cascade,
   note_id uuid references public.notes (id) on delete cascade,
-  author_id uuid not null references public.profiles (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
   body text not null,
   created_at timestamptz not null default now()
 );
@@ -489,7 +489,7 @@ create policy "Notes select" on public.notes for select using (
 );
 
 create policy "Notes insert" on public.notes for insert with check (
-  author_id = auth.uid()
+  user_id = auth.uid()
   and (
     exists (
       select 1 from public.cases c
@@ -503,7 +503,7 @@ create policy "Notes insert" on public.notes for insert with check (
   )
 );
 
-create policy "Notes update" on public.notes for update using (author_id = auth.uid());
+create policy "Notes update" on public.notes for update using (user_id = auth.uid());
 
 create policy "Comments select" on public.comments for select using (
   exists (
@@ -514,7 +514,7 @@ create policy "Comments select" on public.comments for select using (
 );
 
 create policy "Comments insert" on public.comments for insert with check (
-  author_id = auth.uid()
+  user_id = auth.uid()
   and exists (
     select 1 from public.cases c
     where c.id = comments.case_id

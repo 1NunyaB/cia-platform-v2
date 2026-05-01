@@ -1,12 +1,18 @@
+import {
+  caseDirectorySearchBlob,
+  legacyArraysFromPeople,
+  parseCaseIncidents,
+  resolvedCasePeople,
+} from "@/lib/case-directory";
 import type { CaseRow } from "@/types";
 
 export type CaseListFilters = {
-  /** Matches title, description, accused, victims, weapon, city, state, year string. */
+  /** Matches title, description, accused, victims, charges, city, state, year string. */
   q: string;
   accused: string;
   victim: string;
   state: string;
-  weapon: string;
+  charges: string;
   /** Exact calendar year when set */
   year: number | null;
 };
@@ -30,7 +36,7 @@ export function parseCaseListFilters(
     accused: g("accused").trim(),
     victim: g("victim").trim(),
     state: g("state").trim(),
-    weapon: g("weapon").trim(),
+    charges: g("charges").trim() || g("weapon").trim(),
     year,
   };
 }
@@ -41,7 +47,7 @@ export function hasActiveCaseFilters(f: CaseListFilters): boolean {
       f.accused ||
       f.victim ||
       f.state ||
-      f.weapon ||
+      f.charges ||
       (f.year != null && Number.isFinite(f.year)),
   );
 }
@@ -53,46 +59,48 @@ export function filterCasesByMetadata(cases: CaseRow[], f: CaseListFilters): Cas
   let out = cases;
 
   if (f.year != null) {
-    out = out.filter((c) => (c.incident_year as number | null | undefined) === f.year);
+    out = out.filter((c) => {
+      if ((c.incident_year as number | null | undefined) === f.year) return true;
+      return parseCaseIncidents((c as { incidents?: unknown }).incidents).some((i) => i.year === f.year);
+    });
   }
 
   if (f.accused) {
     const t = f.accused.toLowerCase();
-    out = out.filter((c) => (c.accused_label ?? "").toLowerCase().includes(t));
+    out = out.filter((c) => {
+      if ((c.accused_label ?? "").toLowerCase().includes(t)) return true;
+      const { case_accused } = legacyArraysFromPeople(resolvedCasePeople(c));
+      return case_accused.some((a) => a.toLowerCase().includes(t));
+    });
   }
 
   if (f.victim) {
     const t = f.victim.toLowerCase();
-    out = out.filter((c) => (c.victim_labels ?? "").toLowerCase().includes(t));
+    out = out.filter((c) => {
+      if ((c.victim_labels ?? "").toLowerCase().includes(t)) return true;
+      const { case_victims } = legacyArraysFromPeople(resolvedCasePeople(c));
+      return case_victims.some((v) => v.toLowerCase().includes(t));
+    });
   }
 
   if (f.state) {
     const t = f.state.toLowerCase();
-    out = out.filter((c) => (c.incident_state ?? "").toLowerCase().includes(t));
+    out = out.filter((c) => {
+      if ((c.incident_state ?? "").toLowerCase().includes(t)) return true;
+      return parseCaseIncidents((c as { incidents?: unknown }).incidents).some((i) =>
+        (i.state ?? "").toLowerCase().includes(t),
+      );
+    });
   }
 
-  if (f.weapon) {
-    const t = f.weapon.toLowerCase();
-    out = out.filter((c) => (c.known_weapon ?? "").toLowerCase().includes(t));
+  if (f.charges) {
+    const t = f.charges.toLowerCase();
+    out = out.filter((c) => (c.charges ?? "").toLowerCase().includes(t));
   }
 
   if (f.q) {
     const k = f.q.toLowerCase();
-    out = out.filter((c) => {
-      const blob = [
-        c.title,
-        c.description,
-        c.accused_label,
-        c.victim_labels,
-        c.known_weapon,
-        c.incident_city,
-        c.incident_state,
-        c.incident_year != null ? String(c.incident_year) : "",
-      ]
-        .map((x) => (x ?? "").toLowerCase())
-        .join(" ");
-      return blob.includes(k);
-    });
+    out = out.filter((c) => caseDirectorySearchBlob(c).includes(k));
   }
 
   return out;

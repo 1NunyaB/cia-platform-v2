@@ -9,7 +9,7 @@ type Props = {
   accused: string;
   victim: string;
   state: string;
-  weapon: string;
+  charges: string;
   year: string;
 };
 
@@ -23,7 +23,7 @@ export function CasesSearchFilters(props: Props) {
       <CardHeader className="space-y-1 pb-2">
         <CardTitle className="text-base text-foreground">Search investigations</CardTitle>
         <CardDescription className="text-foreground/90 leading-relaxed">
-          Filter by people, location, weapon, or a phrase. Matches stored case metadata and description.
+          Filter by people, location, charges, or a phrase. Matches stored case metadata and description.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -86,14 +86,14 @@ export function CasesSearchFilters(props: Props) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cases-weapon" className="text-foreground">
-                Known murder weapon
+              <Label htmlFor="cases-charges" className="text-foreground">
+                Charges
               </Label>
               <Input
-                id="cases-weapon"
-                name="weapon"
-                placeholder="e.g. knife, firearm…"
-                defaultValue={props.weapon}
+                id="cases-charges"
+                name="charges"
+                placeholder="Words in the charges field…"
+                defaultValue={props.charges}
                 autoComplete="off"
                 className="border-input bg-form-field text-form-field-foreground"
               />

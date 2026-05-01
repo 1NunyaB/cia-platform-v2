@@ -1,8 +1,9 @@
 "use client";
 
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { SourcePlatformCombobox } from "@/components/source-platform-combobox";
+import { SourceProgramCombobox } from "@/components/source-program-combobox";
+import { SourceSiteCombobox } from "@/components/source-site-combobox";
 import {
   EVIDENCE_SOURCE_TYPES,
   EVIDENCE_SOURCE_TYPE_LABELS,
@@ -16,6 +17,7 @@ export function EvidenceSourceFields({
   idPrefix,
   defaultUrl,
   defaultPlatform,
+  defaultProgram,
   variant = "default",
 }: {
   idPrefix: string;
@@ -23,6 +25,8 @@ export function EvidenceSourceFields({
   defaultUrl?: string;
   /** Prefill platform/network (e.g. duplicate upload). */
   defaultPlatform?: string;
+  /** Prefill program/show/title. */
+  defaultProgram?: string;
   /** `intake`: light surfaces for the evidence intake flow. */
   variant?: "default" | "intake";
 }) {
@@ -95,12 +99,14 @@ export function EvidenceSourceFields({
           <Label htmlFor={`${idPrefix}-program`} className={labelClass}>
             Program / show / title
           </Label>
-          <Input
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Search past titles or type a new one — saved for next time.
+          </p>
+          <SourceProgramCombobox
             id={`${idPrefix}-program`}
             name="source_program"
-            placeholder="Broadcast, episode, article headline…"
-            className={inputClass}
-            autoComplete="off"
+            variant={variant}
+            defaultValue={defaultProgram}
           />
         </div>
       </div>
@@ -109,16 +115,13 @@ export function EvidenceSourceFields({
           Source Site (optional — e.g. wikipedia.org)
         </Label>
         <p className="text-[11px] leading-snug text-muted-foreground">
-          Used for grouping and reference. Evidence is pulled from the links above.
+          Search saved site hosts or type one — used for grouping. Evidence is pulled from the links above.
         </p>
-        <Input
+        <SourceSiteCombobox
           id={`${idPrefix}-url`}
           name="source_url"
-          type="text"
-          inputMode="url"
-          placeholder="wikipedia.org"
+          variant={variant}
           defaultValue={defaultUrl ?? ""}
-          className={inputClass}
         />
       </div>
     </div>

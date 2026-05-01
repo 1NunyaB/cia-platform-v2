@@ -26,6 +26,19 @@ export function evidenceRowNeedsExtraction(input: {
   return ex !== "ok";
 }
 
+/**
+ * True when the row would show the “Needs reviewing” marker (no AI analysis yet, past upload pipeline)
+ * and the current user has not opened the file in the library/detail flow (`evidence_file_views`).
+ * Used for subtle list/detail emphasis — not an error state.
+ */
+export function evidenceRowNeedsReviewUnopened(input: {
+  processingStatus: EvidenceProcessingStatus;
+  hasAiAnalysis: boolean;
+  viewed: boolean;
+}): boolean {
+  return evidenceRowNeedsAnalyzing(input) && !input.viewed;
+}
+
 /** True when the file is stored and viewable but no AI analysis row exists (optional triage marker). */
 export function evidenceRowNeedsAnalyzing(input: {
   processingStatus: EvidenceProcessingStatus;

@@ -106,6 +106,22 @@ type BulkBatchRow = {
   selected: boolean;
 };
 
+function isAttachPermissionError(status: number, message?: string): boolean {
+  if (status !== 403) return false;
+  const text = String(message ?? "").toLowerCase();
+  return text.includes("attach evidence to this case") || text.includes("not allowed");
+}
+
+function classifyFailureSource(message?: string): string | null {
+  const text = String(message ?? "").toLowerCase();
+  if (!text) return null;
+  if (text.includes("attach evidence to this case")) return "Attachment permission";
+  if (text.includes("storage")) return "Storage permission";
+  if (text.includes("evidence record") || text.includes("create an evidence record")) return "Record creation permission";
+  if (text.includes("not allowed") || text.includes("forbidden") || text.includes("permission")) return "Permission";
+  return null;
+}
+
 function evidenceDetailHref(
   mode: "case" | "library",
   caseId: string | undefined,
@@ -147,7 +163,9 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
   const router = useRouter();
   const [attachToCurrentCase, setAttachToCurrentCase] = useState(true);
   const { apiEvidence } = useIntakeApi(mode, caseId, attachToCurrentCase);
+  const libraryEvidenceApi = "/api/library/evidence";
   const [singleError, setSingleError] = useState<string | null>(null);
+  const [singleInfo, setSingleInfo] = useState<string | null>(null);
   const [singleLoading, setSingleLoading] = useState(false);
   const [dupInfo, setDupInfo] = useState<{
     existing: DuplicateEvidenceMatch;
@@ -157,6 +175,7 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
   async function onSingleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSingleError(null);
+    setSingleInfo(null);
     setDupInfo(null);
     const form = e.currentTarget;
     const input = form.elements.namedItem("file") as HTMLInputElement;
@@ -191,6 +210,30 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
       return;
     }
     if (!res.ok) {
+      if (mode === "case" && attachToCurrentCase && isAttachPermissionError(res.status, data.error)) {
+        const retryFd = new FormData(form);
+        const libRes = await fetch(libraryEvidenceApi, {
+          method: "POST",
+          body: retryFd,
+        });
+        const libData = (await libRes.json().catch(() => ({}))) as {
+          error?: string;
+          id?: string;
+          warning?: string;
+          duplicate?: boolean;
+          existing?: DuplicateEvidenceMatch;
+          message?: string;
+        };
+        if (libRes.ok && libData.id) {
+          setAttachToCurrentCase(false);
+          setSingleInfo("You do not have permission to attach to this case. Uploaded to Personal library only.");
+          form.reset();
+          router.refresh();
+          return;
+        }
+        setSingleError(libData.error ?? data.error ?? "Upload failed");
+        return;
+      }
       setSingleError(data.error ?? "Upload failed");
       return;
     }
@@ -244,7 +287,22 @@ export function EvidenceIntakeSingleForm({ mode, caseId }: IntakeProps) {
         ) : null}
         {singleError ? (
           <Alert variant="destructive">
-            <AlertDescription>{singleError}</AlertDescription>
+            <AlertDescription className="space-y-1">
+              {(() => {
+                const source = classifyFailureSource(singleError);
+                return source ? (
+                  <p className="text-xs font-semibold uppercase tracking-wide text-destructive/90">
+                    Failure source: {source}
+                  </p>
+                ) : null;
+              })()}
+              <p>{singleError}</p>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {singleInfo ? (
+          <Alert className={successAlertClass}>
+            <AlertDescription>{singleInfo}</AlertDescription>
           </Alert>
         ) : null}
         <div className="space-y-2">
@@ -287,6 +345,7 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
   const router = useRouter();
   const [attachToCurrentCase, setAttachToCurrentCase] = useState(true);
   const { apiEvidence } = useIntakeApi(mode, caseId, attachToCurrentCase);
+  const libraryEvidenceApi = "/api/library/evidence";
   const [bulkRows, setBulkRows] = useState<BulkBatchRow[]>([]);
   const bulkRowsRef = useRef<BulkBatchRow[]>([]);
   bulkRowsRef.current = bulkRows;
@@ -369,13 +428,49 @@ export function EvidenceIntakeBulkForm({ mode, caseId }: IntakeProps) {
         continue;
       }
       if (!res.ok) {
+        const source = classifyFailureSource(data.error);
+        if (mode === "case" && attachToCurrentCase && isAttachPermissionError(res.status, data.error)) {
+          const retryFd = new FormData();
+          retryFd.set("file", arr[i]!);
+          retryFd.set("source_type", sourcePayload.source_type);
+          retryFd.set("source_platform", sourcePayload.source_platform ?? "");
+          retryFd.set("source_program", sourcePayload.source_program ?? "");
+          retryFd.set("source_url", sourcePayload.source_url ?? "");
+          const libRes = await fetch(libraryEvidenceApi, {
+            method: "POST",
+            body: retryFd,
+          });
+          const libData = (await libRes.json().catch(() => ({}))) as {
+            error?: string;
+            warning?: string;
+            id?: string;
+          };
+          if (libRes.ok && libData.id) {
+            setAttachToCurrentCase(false);
+            setBulkRows((prev) =>
+              prev.map((r) =>
+                r.key === rowKey
+                  ? {
+                      ...r,
+                      evidenceId: libData.id,
+                      uploadPhase: "done",
+                      uploadDetail:
+                        "No permission for case attachment; uploaded to Personal library only.",
+                      selected: false,
+                    }
+                  : r,
+              ),
+            );
+            continue;
+          }
+        }
         setBulkRows((prev) =>
           prev.map((r) =>
             r.key === rowKey
               ? {
                   ...r,
                   uploadPhase: "error",
-                  uploadDetail: data.error ?? "Blocked or rejected",
+                  uploadDetail: source ? `[${source}] ${data.error ?? "Blocked or rejected"}` : data.error ?? "Blocked or rejected",
                   selected: false,
                 }
               : r,

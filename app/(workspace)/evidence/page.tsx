@@ -164,16 +164,16 @@ export default function EvidenceLibrary() {
             <MapPin className="h-4 w-4" />
             Location map
           </Link>
-          <button
-            type="button"
+          <Link
+            href="/evidence/add"
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
             style={{ backgroundColor: "#1e40af", border: "1px solid #2563eb" }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1d4ed8")}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#1e40af")}
           >
-            <Upload className="h-4 w-4" />
+            <Upload className="h-4 w-4" aria-hidden />
             Upload Evidence
-          </button>
+          </Link>
         </div>
       </div>
 

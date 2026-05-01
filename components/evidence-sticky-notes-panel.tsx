@@ -16,14 +16,14 @@ export function EvidenceStickyNotesPanel({
   currentUserId,
   currentUserCanDelete,
   initial,
-  getProfile,
+  profilesById,
 }: {
   caseId: string;
   evidenceId: string;
   currentUserId: string | null;
   currentUserCanDelete: boolean;
   initial: { sticky: StickyNoteRow; replies: StickyReplyRow[] }[];
-  getProfile: (id: string | null) => ProfileWithInvestigator | undefined;
+  profilesById: Record<string, ProfileWithInvestigator>;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
@@ -120,7 +120,7 @@ export function EvidenceStickyNotesPanel({
             <li key={sticky.id} className="rounded-md border border-border bg-panel p-3">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[11px] text-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                  <AuthorPersonaLine profile={getProfile(sticky.author_id)} fallbackId={sticky.author_id} />
+                  <AuthorPersonaLine profile={sticky.user_id ? profilesById[sticky.user_id] : undefined} fallbackId={sticky.user_id} />
                   <span className="text-foreground/80">{new Date(sticky.created_at).toLocaleString()}</span>
                 </p>
                 {canDelete ? (
@@ -141,7 +141,7 @@ export function EvidenceStickyNotesPanel({
                   {replies.map((r) => (
                     <li key={r.id} className="text-xs text-foreground">
                       <span className="text-foreground/85 inline-flex items-center gap-1">
-                        <AuthorPersonaLine profile={getProfile(r.author_id)} fallbackId={r.author_id} /> ·{" "}
+                        <AuthorPersonaLine profile={r.user_id ? profilesById[r.user_id] : undefined} fallbackId={r.user_id} /> ·{" "}
                       </span>
                       {new Date(r.created_at).toLocaleString()}
                       <p className="text-sm mt-0.5 whitespace-pre-wrap">{r.body}</p>

@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
   try {
     const { error } = await supabase.from("dashboard_chat_messages").insert({
-      author_id: user.id,
+      user_id: user.id,
       body: rate.trimmed,
     });
     if (error) throw new Error(error.message);

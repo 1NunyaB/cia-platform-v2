@@ -21,8 +21,8 @@ export async function addCaseNote(
     .from("notes")
     .insert({
       case_id: input.caseId,
-      author_id: input.authorId,
-      author_label: input.authorId ? null : label,
+      user_id: input.userId,
+      user_label: input.userId ? null : label,
       body: input.body,
       evidence_file_id: input.evidenceFileId ?? null,
       visibility,
@@ -78,7 +78,7 @@ export async function addComment(
     .from("comments")
     .insert({
       case_id: input.caseId,
-      author_id: input.authorId,
+      user_id: input.userId,
       body: input.body,
       evidence_file_id: input.evidenceFileId ?? null,
       note_id: input.noteId ?? null,

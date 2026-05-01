@@ -47,7 +47,7 @@ export async function POST(
     .from("evidence_sticky_note_replies")
     .insert({
       sticky_note_id: stickyNoteId,
-      author_id: user.id,
+      user_id: user.id,
       body: parsed.data.body,
     })
     .select("id")

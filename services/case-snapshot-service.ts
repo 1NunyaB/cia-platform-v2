@@ -1,4 +1,5 @@
-import type { AppSupabaseClient } from "@/types";
+import { caseDirectorySearchBlob } from "@/lib/case-directory";
+import type { AppSupabaseClient, CaseRow } from "@/types";
 import { getCaseIndexSnapshot } from "@/services/case-index-service";
 
 export type CaseSnapshot = {
@@ -42,7 +43,9 @@ export async function buildCaseSnapshot(
 ): Promise<CaseSnapshot | null> {
   const { data: caseRow, error } = await supabase
     .from("cases")
-    .select("id, title, description, created_at, known_weapon, investigation_started_at, investigation_on_hold_at")
+    .select(
+      "id, title, description, created_at, charges, indictment_month_year, conviction_month_year, sentence, incident_entries, incidents, case_people, case_victims, case_accused, legal_milestones, evidence_file_entries, accused_label, victim_labels, incident_city, incident_state, incident_year, investigation_started_at, investigation_on_hold_at",
+    )
     .eq("id", caseId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -53,9 +56,7 @@ export async function buildCaseSnapshot(
   const event_ids = snap.events.map((event) => event.id);
   const location_ids = snap.locations.map((loc) => loc.entityId);
 
-  const textHaystack = `${String(caseRow.title ?? "")} ${String(caseRow.description ?? "")} ${String(caseRow.known_weapon ?? "")}`
-    .toLowerCase()
-    .trim();
+  const textHaystack = caseDirectorySearchBlob(caseRow as CaseRow).toLowerCase().trim();
   const hasFinancialHint = /bank|wire|transfer|invoice|ledger|account|payment|fraud|financial|money/.test(
     textHaystack,
   );

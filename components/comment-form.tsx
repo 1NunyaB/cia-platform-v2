@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cisCaseForm } from "@/lib/cis-case-page-shell";
+import { cn } from "@/lib/utils";
 
 export function CommentForm({
   caseId,
@@ -13,6 +15,7 @@ export function CommentForm({
   noteId,
   parentCommentId,
   compact,
+  variant = "default",
 }: {
   caseId: string;
   evidenceFileId?: string | null;
@@ -20,11 +23,13 @@ export function CommentForm({
   parentCommentId?: string | null;
   /** Smaller UI for inline thread replies */
   compact?: boolean;
+  variant?: "default" | "cisCase";
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dark = variant === "cisCase";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,17 +64,30 @@ export function CommentForm({
         </Alert>
       ) : null}
       <div className={compact ? "flex-1 min-w-[120px]" : "space-y-2"}>
-        {!compact ? <Label htmlFor="comment-body">Comment</Label> : null}
+        {!compact ? (
+          <Label htmlFor="comment-body" className={dark ? cisCaseForm.label : undefined}>
+            Comment
+          </Label>
+        ) : null}
         <Textarea
           id={compact ? `comment-${parentCommentId ?? "root"}` : "comment-body"}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={compact ? 1 : 2}
           placeholder={compact ? "Reply…" : undefined}
-          className={compact ? "min-h-[2rem] text-xs" : undefined}
+          className={cn(
+            compact ? "min-h-[2rem] text-xs" : undefined,
+            dark && cisCaseForm.control,
+            dark && compact && "min-h-[2.25rem]",
+          )}
         />
       </div>
-      <Button type="submit" size="sm" disabled={loading || !body.trim()}>
+      <Button
+        type="submit"
+        size="sm"
+        disabled={loading || !body.trim()}
+        className={dark ? "border border-blue-600 bg-[#1e40af] text-white hover:bg-blue-600" : undefined}
+      >
         {loading ? "Posting…" : compact ? "Reply" : "Post comment"}
       </Button>
     </form>

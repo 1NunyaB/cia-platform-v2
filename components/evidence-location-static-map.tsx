@@ -59,7 +59,7 @@ export function EvidenceLocationStaticMap({ pins, selectedId, onSelect }: Props)
         className="relative w-full overflow-hidden rounded-xl border border-[#1e2d42] bg-[#0a1524] shadow-inner"
         style={{ aspectRatio: "2 / 1" }}
         role="img"
-        aria-label="Static world map with evidence pins"
+        aria-label="Static world map with location pins"
       >
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 50" preserveAspectRatio="none" aria-hidden>
           <defs>
@@ -127,7 +127,7 @@ export function EvidenceLocationStaticMap({ pins, selectedId, onSelect }: Props)
                   href={p.href}
                   className="inline-flex shrink-0 items-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
                 >
-                  Open evidence
+                  {p.linkLabel ?? "Open evidence"}
                 </Link>
               </div>
             );

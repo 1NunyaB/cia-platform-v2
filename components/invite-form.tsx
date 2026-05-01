@@ -13,8 +13,10 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { CaseMemberRole } from "@/types";
+import { cisCaseForm } from "@/lib/cis-case-page-shell";
+import { cn } from "@/lib/utils";
 
-export function InviteForm({ caseId }: { caseId: string }) {
+export function InviteForm({ caseId, variant = "default" }: { caseId: string; variant?: "default" | "cisCase" }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<CaseMemberRole>("contributor");
   const [loading, setLoading] = useState(false);
@@ -43,23 +45,28 @@ export function InviteForm({ caseId }: { caseId: string }) {
     setInviteToken((data as { token?: string }).token ?? null);
   }
 
+  const dark = variant === "cisCase";
+
   return (
-    <form onSubmit={onSubmit} className="space-y-3 max-w-md">
+    <form onSubmit={onSubmit} className="max-w-md space-y-3">
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="invite-email">Email</Label>
+          <Label htmlFor="invite-email" className={dark ? cisCaseForm.label : undefined}>
+            Email
+          </Label>
           <Input
             id="invite-email"
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className={dark ? cisCaseForm.control : undefined}
           />
         </div>
         <div className="space-y-2">
-          <Label>Role</Label>
+          <Label className={dark ? cisCaseForm.label : undefined}>Role</Label>
           <Select value={role} onValueChange={(v) => setRole(v as CaseMemberRole)}>
-            <SelectTrigger>
+            <SelectTrigger className={dark ? cn(cisCaseForm.control, "h-10") : undefined}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -92,11 +99,15 @@ export function InviteForm({ caseId }: { caseId: string }) {
           </AlertDescription>
         </Alert>
       ) : null}
-      <p className="text-xs text-muted-foreground">
+      <p className={cn("text-xs", dark ? "text-slate-500" : "text-muted-foreground")}>
         Recipients open <code className="text-[10px]">/invite/&lt;token&gt;</code>, sign in with the invited email,
         and accept (see migration <code className="text-[10px]">026_accept_case_invite_rpc.sql</code>).
       </p>
-      <Button type="submit" disabled={loading}>
+      <Button
+        type="submit"
+        disabled={loading}
+        className={dark ? cn("border border-blue-600 bg-[#1e40af] text-white hover:bg-blue-600") : undefined}
+      >
         {loading ? "Sending…" : "Create invite"}
       </Button>
     </form>

@@ -74,7 +74,7 @@ export async function POST(
     .insert({
       case_id: caseId,
       evidence_file_id: evidenceId,
-      author_id: user.id,
+      user_id: user.id,
       body: parsed.data.body,
     })
     .select("id")

@@ -4,8 +4,17 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-export function StartInvestigationButton({ caseId, disabled = false }: { caseId: string; disabled?: boolean }) {
+export function StartInvestigationButton({
+  caseId,
+  disabled = false,
+  className,
+}: {
+  caseId: string;
+  disabled?: boolean;
+  className?: string;
+}) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
 
@@ -13,7 +22,7 @@ export function StartInvestigationButton({ caseId, disabled = false }: { caseId:
     <Button
       type="button"
       size="sm"
-      className="h-8"
+      className={cn("h-8", className)}
       disabled={disabled || loading}
       onClick={async () => {
         setLoading(true);

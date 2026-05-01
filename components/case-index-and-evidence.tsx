@@ -22,6 +22,9 @@ import {
 } from "@/lib/workspace-evidence-ai-bridge";
 import { EvidenceBulkActionBar } from "@/components/evidence-bulk-action-bar";
 import { EvidenceKindBadge } from "@/components/evidence-kind-badge";
+import { cisCasePage } from "@/lib/cis-case-page-shell";
+import { cn } from "@/lib/utils";
+import { evidenceRowNeedsReviewUnopened } from "@/lib/evidence-row-needs";
 
 export type EvidenceRow = {
   id: string;
@@ -51,11 +54,7 @@ type IndexFilter =
   | { key: string; label: string; evidenceIds: string[] };
 
 function pill(active: boolean) {
-  return `text-left rounded-md border px-2 py-1.5 text-xs transition-colors ${
-    active
-      ? "border-sky-500 bg-sky-100 text-foreground font-medium"
-      : "border-border bg-white text-foreground hover:bg-panel hover:border-ring"
-  }`;
+  return cn(cisCasePage.indexPillBase, active ? cisCasePage.indexPillActive : cisCasePage.indexPillInactive);
 }
 
 export function CaseIndexWorkspace({
@@ -119,32 +118,32 @@ export function CaseIndexWorkspace({
   }) {
     return (
       <div className="space-y-2">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
-        {empty && !children ? <p className="text-xs text-muted-foreground">{empty}</p> : children}
+        <h4 className={cisCasePage.indexSectionTitle}>{title}</h4>
+        {empty && !children ? <p className="text-xs text-slate-500">{empty}</p> : children}
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Card className="border-border bg-white shadow-md" id="case-index">
-        <CardHeader className="border-b border-border pb-3">
-          <CardTitle className="text-lg tracking-tight text-foreground">Case index</CardTitle>
-          <CardDescription className="text-muted-foreground text-sm">
+      <Card className={cn(cisCasePage.panel)} id="case-index">
+        <CardHeader className={cn("pb-3", cisCasePage.panelHeaderBorder)}>
+          <CardTitle className={cn(cisCasePage.cardTitle, "text-lg")}>Case index</CardTitle>
+          <CardDescription className={cn(cisCasePage.cardDescription, "text-sm")}>
             Live navigation by clusters, aliases, roles, places, time, events, and sources. Click an entry to filter
             evidence below. Updates when evidence and analysis change.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-4 space-y-6 max-h-[min(70vh,720px)] overflow-y-auto pr-1">
+        <CardContent className="max-h-[min(70vh,720px)] space-y-6 overflow-y-auto pr-1 pt-4">
           <Section title="Cases">
             <div className="flex flex-wrap gap-2">
               <Link
                 href="/cases"
-                className="text-xs rounded-md border border-border bg-document px-2 py-1 text-blue-900 font-medium hover:bg-sky-100"
+                className="rounded-md border border-[#1e2d42] bg-[#0f1623] px-2 py-1 text-xs font-medium text-sky-400 hover:border-sky-500/40 hover:bg-[#1a2335]"
               >
                 All cases
               </Link>
-              <span className="text-xs text-muted-foreground py-1">This workspace</span>
+              <span className="py-1 text-xs text-slate-500">This workspace</span>
             </div>
           </Section>
 
@@ -164,7 +163,7 @@ export function CaseIndexWorkspace({
                   }
                 >
                   {c.title}{" "}
-                  <span className="text-muted-foreground">({c.evidenceIds.length})</span>
+                  <span className="text-slate-500">({c.evidenceIds.length})</span>
                 </button>
               ))}
             </div>
@@ -187,7 +186,7 @@ export function CaseIndexWorkspace({
                   title={a.entityLabel}
                 >
                   {a.aliasDisplay}{" "}
-                  <span className="text-muted-foreground">· {a.entityLabel}</span>
+                  <span className="text-slate-500">· {a.entityLabel}</span>
                 </button>
               ))}
             </div>
@@ -208,7 +207,7 @@ export function CaseIndexWorkspace({
                     })
                   }
                 >
-                  {a.label} <span className="text-muted-foreground">({a.evidenceIds.length})</span>
+                  {a.label} <span className="text-slate-500">({a.evidenceIds.length})</span>
                 </button>
               ))}
             </div>
@@ -229,7 +228,7 @@ export function CaseIndexWorkspace({
                     })
                   }
                 >
-                  {a.label} <span className="text-muted-foreground">({a.evidenceIds.length})</span>
+                  {a.label} <span className="text-slate-500">({a.evidenceIds.length})</span>
                 </button>
               ))}
             </div>
@@ -250,7 +249,7 @@ export function CaseIndexWorkspace({
                     })
                   }
                 >
-                  {a.label} <span className="text-muted-foreground">({a.evidenceIds.length})</span>
+                  {a.label} <span className="text-slate-500">({a.evidenceIds.length})</span>
                 </button>
               ))}
             </div>
@@ -267,7 +266,7 @@ export function CaseIndexWorkspace({
                     setFilter({ key: `year:${y.key}`, label: y.label, evidenceIds: y.evidenceIds })
                   }
                 >
-                  {y.label} <span className="text-muted-foreground">({y.evidenceIds.length})</span>
+                  {y.label} <span className="text-slate-500">({y.evidenceIds.length})</span>
                 </button>
               ))}
             </div>
@@ -284,7 +283,7 @@ export function CaseIndexWorkspace({
                     setFilter({ key: `month:${y.key}`, label: y.label, evidenceIds: y.evidenceIds })
                   }
                 >
-                  {y.label} <span className="text-muted-foreground">({y.evidenceIds.length})</span>
+                  {y.label} <span className="text-slate-500">({y.evidenceIds.length})</span>
                 </button>
               ))}
             </div>
@@ -306,7 +305,7 @@ export function CaseIndexWorkspace({
                   }
                 >
                   {ev.title}{" "}
-                  <span className="text-muted-foreground">
+                  <span className="text-slate-500">
                     {ev.occurredAt ? `· ${ev.occurredAt.slice(0, 10)}` : ""} ({ev.evidenceIds.length})
                   </span>
                 </button>
@@ -337,7 +336,7 @@ export function CaseIndexWorkspace({
                     {s.platform ? ` · ${s.platform}` : ""}
                     {s.program ? ` · ${s.program}` : ""}
                   </span>
-                  <span className="text-muted-foreground">({s.evidenceIds.length})</span>
+                  <span className="text-slate-500">({s.evidenceIds.length})</span>
                 </button>
               ))}
             </div>
@@ -362,84 +361,82 @@ export function CaseIndexWorkspace({
                   }
                   title={it.originalFilename}
                 >
-                  <span className="block truncate font-medium text-foreground">{it.displayFilename}</span>
-                  <span className="block truncate text-[11px] text-muted-foreground">
+                  <span className="block truncate font-medium text-slate-100">{it.displayFilename}</span>
+                  <span className="block truncate text-[11px] text-slate-500">
                     {it.shortAlias ? (
                       <>
-                        <span className="text-blue-800 font-medium">{it.shortAlias}</span>
-                        <span className="text-muted-foreground"> · </span>
+                        <span className="font-medium text-sky-400">{it.shortAlias}</span>
+                        <span className="text-slate-500"> · </span>
                       </>
                     ) : null}
-                    <span className="text-muted-foreground">{it.originalFilename}</span>
+                    <span className="text-slate-500">{it.originalFilename}</span>
                   </span>
                 </button>
               ))}
             </div>
           </Section>
 
-          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border">
+          <div className="flex flex-wrap items-center gap-2 border-t border-[#1e2d42] pt-3">
             <Button
               type="button"
               variant="secondary"
               size="sm"
               disabled={filter.key === "all"}
+              className={cisCasePage.secondaryBtn}
               onClick={() => setFilter({ key: "all" })}
             >
               Clear filter
             </Button>
             {filter.key !== "all" && "label" in filter ? (
-              <span className="text-xs text-blue-900 font-medium">
+              <span className="text-xs font-medium text-sky-300">
                 Showing {filtered.length} of {counts} — {filter.label}
               </span>
             ) : (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-slate-500">
                 {counts} evidence file{counts === 1 ? "" : "s"}
               </span>
             )}
-            <Link
-              href={`/cases/${caseId}/timeline`}
-              className="text-xs text-blue-800 font-medium hover:underline ml-auto"
-            >
+            <Link href={`/cases/${caseId}/timeline`} className={cn("ml-auto text-xs", cisCasePage.linkAccent)}>
               Timelines
             </Link>
-            <Link href={`/cases/${caseId}/entities`} className="text-xs text-blue-800 font-medium hover:underline">
+            <Link href={`/cases/${caseId}/entities`} className={cn("text-xs", cisCasePage.linkAccent)}>
               Entities
             </Link>
           </div>
         </CardContent>
       </Card>
 
-      <Card id="case-evidence" className="border-border bg-white shadow-sm">
-        <CardHeader>
-          <CardTitle>Current case evidence</CardTitle>
-          <CardDescription>
-            Use <span className="font-medium text-foreground">Add evidence</span> for uploads and URL imports (source
+      <Card id="case-evidence" className={cn(cisCasePage.panel)}>
+        <CardHeader className={cn("pb-3", cisCasePage.panelHeaderBorder)}>
+          <CardTitle className={cisCasePage.cardTitle}>Current case evidence</CardTitle>
+          <CardDescription className={cisCasePage.cardDescription}>
+            Use <span className="font-medium text-slate-200">Add evidence</span> for uploads and URL imports (source
             details on the next screens). Filter this list with the case index above.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {evidenceUploadSlot}
-          <Separator />
+          <Separator className="border-[#1e2d42]/90" />
           {filter.key !== "all" && "label" in filter ? (
-            <p className="text-xs text-blue-900 font-medium">
+            <p className="text-xs font-medium text-sky-300">
               Index filter: {filter.label} — showing {filtered.length} of {counts}.
             </p>
           ) : null}
           <div>
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
-              <h3 className="text-sm font-medium text-foreground">Files</h3>
+            <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+              <h3 className="text-sm font-medium text-slate-200">Files</h3>
               <EvidenceMarkerLegend className="max-w-[220px]" />
             </div>
           {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No evidence matches this index selection.</p>
+            <p className="text-sm text-slate-500">No evidence matches this index selection.</p>
           ) : (
             <ul className="space-y-2">
               {allowBulkActions ? (
-                <li className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-2.5 py-2 text-xs text-foreground">
-                  <label className="flex cursor-pointer items-center gap-2 font-medium">
+                <li className={cisCasePage.bulkSelectRow}>
+                  <label className="flex cursor-pointer items-center gap-2 font-medium text-slate-300">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-input"
+                      className="h-4 w-4 rounded border-[#334155] bg-[#0f1623] text-sky-500"
                       checked={allFilteredSelected}
                       onChange={toggleSelectAllFiltered}
                       aria-label="Select all visible rows"
@@ -462,6 +459,11 @@ export function CaseIndexWorkspace({
                   viewed: e.viewed ?? false,
                   hasContentDuplicatePeer: e.has_content_duplicate_peer ?? false,
                 });
+                const needsReviewUnopened = evidenceRowNeedsReviewUnopened({
+                  processingStatus: e.processing_status,
+                  hasAiAnalysis: e.has_ai_analysis ?? false,
+                  viewed: e.viewed ?? false,
+                });
                 return (
                 <li
                   key={e.id}
@@ -470,14 +472,18 @@ export function CaseIndexWorkspace({
                     ev.dataTransfer.setData(WORKSPACE_AI_DRAG_MIME, e.id);
                     ev.dataTransfer.effectAllowed = "copy";
                   }}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-panel p-2.5"
+                  className={cn(
+                    cisCasePage.evidenceRow,
+                    needsReviewUnopened &&
+                      "border-l-4 border-l-amber-400 bg-amber-500/[0.06] shadow-[inset_0_0_0_1px_rgba(251,191,36,0.12)]",
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-2">
                       {allowBulkActions ? (
                         <input
                           type="checkbox"
-                          className="mt-2 h-4 w-4 shrink-0 rounded border-input"
+                          className="mt-2 h-4 w-4 shrink-0 rounded border-[#334155] bg-[#0f1623] text-sky-500"
                           checked={selected.has(e.id)}
                           onChange={() => toggleSelect(e.id)}
                           aria-label={`Select ${primary}`}
@@ -489,9 +495,12 @@ export function CaseIndexWorkspace({
                         filenameHint={e.original_filename}
                       />
                       <span className="mt-1.5">
-                        <EvidenceStatusBullets kinds={bullets} />
+                        <EvidenceStatusBullets kinds={bullets} emphasizeNeedsReviewUnopened={needsReviewUnopened} />
                       </span>
-                      <Link href={`/cases/${caseId}/evidence/${e.id}`} className="font-medium hover:underline truncate block min-w-0 pt-0.5">
+                      <Link
+                        href={`/cases/${caseId}/evidence/${e.id}`}
+                        className="block min-w-0 truncate pt-0.5 font-medium text-sky-300 hover:text-sky-200 hover:underline"
+                      >
                         {primary}
                       </Link>
                     </div>
@@ -500,16 +509,16 @@ export function CaseIndexWorkspace({
                     </div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                       {sal ? (
-                        <span className="inline-flex items-center gap-1 rounded border border-document-border bg-document px-1.5 py-0.5 text-[11px] font-mono text-foreground">
+                        <span className="inline-flex items-center gap-1 rounded border border-[#334155] bg-[#0f1623] px-1.5 py-0.5 font-mono text-[11px] text-slate-200">
                           {sal}
                           <CopyInlineButton text={sal} label="Copy short alias (in-app ID)" />
                         </span>
                       ) : null}
-                      <span className="text-[11px] text-muted-foreground truncate max-w-full" title={e.original_filename}>
+                      <span className="text-[11px] text-slate-500 truncate max-w-full" title={e.original_filename}>
                         Original: {e.original_filename}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                       {e.mime_type ?? "unknown type"}
                       {e.source_type && e.source_type !== "unknown" ? (
                         <>
@@ -525,7 +534,7 @@ export function CaseIndexWorkspace({
                       type="button"
                       variant="secondary"
                       size="sm"
-                      className="h-7 border-sky-400 bg-sky-50 px-2 text-[10px] font-semibold text-sky-950 hover:bg-sky-100"
+                      className={cisCasePage.sendToAiBtn}
                       onClick={() =>
                         dispatchWorkspaceAiAttachEvidence({
                           evidenceId: e.id,
@@ -549,6 +558,7 @@ export function CaseIndexWorkspace({
               caseId={caseId}
               selectedIds={[...selected]}
               onClearSelection={() => setSelected(new Set())}
+              appearance="cisCase"
             />
           ) : null}
           </div>

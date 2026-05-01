@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronDown, Filter, Folder, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Filter, Folder, Plus, Search, StickyNote, X } from "lucide-react";
+import { CaseNotesUpdateDialog } from "@/components/case-notes-update-dialog";
 
 export type CasesPageRow = {
   id: string;
@@ -58,6 +59,7 @@ export function CasesPageClient({ rows }: { rows: CasesPageRow[] }) {
   const [createdWithin, setCreatedWithin] = useState<CreatedWindow>("Any");
   const [investigatorFilter, setInvestigatorFilter] = useState<InvestigatorFilter>("Any");
   const [showFilters, setShowFilters] = useState(false);
+  const [caseNotesOpen, setCaseNotesOpen] = useState(false);
 
   const filteredCases = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -115,15 +117,30 @@ export function CasesPageClient({ rows }: { rows: CasesPageRow[] }) {
             Investigations you can access.
           </p>
         </div>
-        <Link
-          href="/cases/new"
-          className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
-          style={{ backgroundColor: "#1e40af", border: "1px solid #2563eb" }}
-        >
-          <Plus className="h-4 w-4" />
-          New Investigation
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {rows.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setCaseNotesOpen(true)}
+              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all"
+              style={{ backgroundColor: "#1a2335", border: "1px solid #334155", color: "#e2e8f0" }}
+            >
+              <StickyNote className="h-4 w-4" />
+              Update Case Notes
+            </button>
+          ) : null}
+          <Link
+            href="/cases/new"
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all"
+            style={{ backgroundColor: "#1e40af", border: "1px solid #2563eb" }}
+          >
+            <Plus className="h-4 w-4" />
+            New Investigation
+          </Link>
+        </div>
       </div>
+
+      <CaseNotesUpdateDialog rows={rows} open={caseNotesOpen} onOpenChange={setCaseNotesOpen} />
 
       <div className="mb-4 flex gap-2">
         {quickFilters.map((f) => (
@@ -193,7 +210,7 @@ export function CasesPageClient({ rows }: { rows: CasesPageRow[] }) {
             </label>
             <input
               type="text"
-              placeholder="Words in title, description, or case id..."
+              placeholder="Words in title, case notes, or case id..."
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               className="w-full rounded-lg px-3 py-2 text-sm outline-none transition-all"

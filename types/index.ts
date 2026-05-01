@@ -97,13 +97,30 @@ export type CaseRow = {
   created_by: string;
   created_at: string;
   updated_at: string;
-  /** Structured incident fields (nullable for legacy rows). */
+  /** Structured incident fields (nullable for legacy rows; derived from `incidents` when set). */
   incident_year?: number | null;
   incident_city?: string | null;
   incident_state?: string | null;
   accused_label?: string | null;
   victim_labels?: string | null;
-  known_weapon?: string | null;
+  /** Formal or alleged charges (multi-line in UI). */
+  charges?: string | null;
+  /** Indictment month/year as MM/YYYY text when known (derived from `legal_milestones`). */
+  indictment_month_year?: string | null;
+  /** Conviction month/year as MM/YYYY text when known (derived from `legal_milestones`). */
+  conviction_month_year?: string | null;
+  /** Sentence or disposition when a conviction exists (derived from first conviction milestone). */
+  sentence?: string | null;
+  /** Grouped incident blocks (people, charges, legal, evidence per incident). */
+  incident_entries?: unknown;
+  /** Repeatable incident locations (JSON array). */
+  incidents?: unknown;
+  /** Unified people rows `{ name, role }` (JSON array). */
+  case_people?: unknown;
+  case_victims?: unknown;
+  case_accused?: unknown;
+  legal_milestones?: unknown;
+  evidence_file_entries?: unknown;
   investigation_started_at?: string | null;
   investigation_started_by?: string | null;
   investigation_on_hold_at?: string | null;
@@ -144,6 +161,8 @@ export type EvidenceFile = {
   id: string;
   /** Null while the file lives in the uploader's library before case assignment. */
   case_id: string | null;
+  /** Incident entry id from `cases.incident_entries[].id` when linked at incident level. */
+  incident_entry_id?: string | null;
   /** Signed-in uploader; null for guest-owned library rows (see guest_session_id). */
   uploaded_by: string | null;
   /** Anonymous session owner when uploaded_by is null. */
@@ -180,7 +199,7 @@ export type EvidenceFile = {
   longitude?: number | null;
 };
 
-/** Pins for `/map` (location-category evidence with coordinates). */
+/** Pins for `/map` (location-category evidence with coordinates, or incident locations with resolved coordinates). */
 export type LocationMapPinRow = {
   id: string;
   href: string;
@@ -190,6 +209,10 @@ export type LocationMapPinRow = {
   caseId: string | null;
   latitude: number;
   longitude: number;
+  /** Primary CTA in the pin detail panel (defaults to “Open evidence” in the UI). */
+  linkLabel?: string;
+  /** When set, pin comes from `case_incident_map_pins` rather than evidence. */
+  incidentEntryId?: string | null;
 };
 
 export type ExtractedText = {
@@ -271,7 +294,7 @@ export type NoteRow = {
   id: string;
   case_id: string;
   evidence_file_id: string | null;
-  author_id: string;
+  user_id: string;
   body: string;
   created_at: string;
   updated_at: string;
@@ -282,7 +305,7 @@ export type CommentRow = {
   case_id: string;
   evidence_file_id: string | null;
   note_id: string | null;
-  author_id: string;
+  r_id: string;
   body: string;
   created_at: string;
 };

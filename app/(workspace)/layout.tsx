@@ -57,7 +57,7 @@ export default async function WorkspaceLayout({
     } catch {
       chatMessages = [];
     }
-    const chatAuthorIds = [...new Set(chatMessages.map((m) => m.author_id).filter(Boolean))] as string[];
+    const chatAuthorIds = [...new Set(chatMessages.map((m) => m.user_id).filter(Boolean))] as string[];
     const chatProfiles = await fetchProfilesByIds(supabase, chatAuthorIds);
     workspaceChatSlot = (
       <DashboardChat

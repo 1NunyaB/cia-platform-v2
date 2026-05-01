@@ -1,19 +1,52 @@
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateServiceClient } from "@/lib/supabase/service";
+import { caseDirectoryPayloadSchema, normalizeCaseDirectoryPayload } from "@/lib/case-directory";
+import { isBlankOrValidMonthYear } from "@/lib/case-month-year";
+import { syncCaseIncidentTimelineEvents } from "@/services/case-incident-timeline-service";
 import { createCase, findExistingCaseByNormalizedTitle } from "@/services/case-service";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-const bodySchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional().nullable(),
-  incident_year: z.number().int().min(1000).max(9999).optional().nullable(),
-  incident_city: z.string().max(200).optional().nullable(),
-  incident_state: z.string().max(100).optional().nullable(),
-  accused_label: z.string().max(500).optional().nullable(),
-  victim_labels: z.string().max(2000).optional().nullable(),
-  known_weapon: z.string().max(500).optional().nullable(),
-});
+function withDefaultNestedArrays(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const body = raw as Record<string, unknown>;
+  if (!Array.isArray(body.incident_entries)) return raw;
+  return {
+    ...body,
+    incident_entries: body.incident_entries.map((entry) => {
+      if (!entry || typeof entry !== "object") return entry;
+      const e = entry as Record<string, unknown>;
+      return {
+        ...e,
+        people: Array.isArray(e.people) ? e.people : [],
+        legal_milestones: Array.isArray(e.legal_milestones) ? e.legal_milestones : [],
+        evidence_items: Array.isArray(e.evidence_items) ? e.evidence_items : [],
+      };
+    }),
+  };
+}
+
+const bodySchema = z
+  .object({
+    title: z.string().min(1),
+    description: z.string().optional().nullable(),
+  })
+  .merge(caseDirectoryPayloadSchema)
+  .superRefine((data, ctx) => {
+    for (let ei = 0; ei < data.incident_entries.length; ei++) {
+      const entry = data.incident_entries[ei];
+      for (let mi = 0; mi < entry.legal_milestones.length; mi++) {
+        const my = entry.legal_milestones[mi]?.month_year?.trim() ?? "";
+        if (my && !isBlankOrValidMonthYear(my)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Each legal action needs a valid month/year.",
+            path: ["incident_entries", ei, "legal_milestones", mi, "month_year"],
+          });
+        }
+      }
+    }
+  });
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -33,7 +66,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = bodySchema.safeParse(json);
+  const parsed = bodySchema.safeParse(withDefaultNestedArrays(json));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -64,17 +97,20 @@ export async function POST(request: Request) {
     }
 
     const d = parsed.data;
+    const norm = normalizeCaseDirectoryPayload({
+      incident_entries: d.incident_entries,
+    });
+
     const { id } = await createCase(supabase, {
       userId: user.id,
       title: d.title,
       description: d.description,
-      incident_year: d.incident_year ?? null,
-      incident_city: d.incident_city?.trim() || null,
-      incident_state: d.incident_state?.trim() || null,
-      accused_label: d.accused_label?.trim() || null,
-      victim_labels: d.victim_labels?.trim() || null,
-      known_weapon: d.known_weapon?.trim() || null,
+      ...norm,
     });
+
+    if (norm.incident_entries.length > 0) {
+      await syncCaseIncidentTimelineEvents(supabase, id, norm.incident_entries);
+    }
 
     if (idempotencyKey) {
       const { error: idemErr } = await privileged.from("case_creation_idempotency").insert({

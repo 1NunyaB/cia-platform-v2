@@ -3,6 +3,8 @@ import type { EvidenceClusterRow } from "@/services/case-investigation-query";
 import type { ClusterAnalysisView } from "@/types/analysis";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EvidenceClusterBlock } from "@/components/evidence-cluster-block";
+import { cisCasePage } from "@/lib/cis-case-page-shell";
+import { cn } from "@/lib/utils";
 
 export function CaseEvidenceClustersCard({
   caseId,
@@ -14,20 +16,17 @@ export function CaseEvidenceClustersCard({
   analysisByClusterId?: Record<string, ClusterAnalysisView>;
 }) {
   return (
-    <Card
-      id="evidence-clusters"
-      className="border-border bg-white shadow-md"
-    >
-      <CardHeader className="border-b border-border pb-3">
-        <CardTitle className="text-lg tracking-tight text-foreground">Linked Evidence Clusters</CardTitle>
-        <CardDescription className="text-muted-foreground text-sm">
+    <Card id="evidence-clusters" className={cn(cisCasePage.panel)}>
+      <CardHeader className={cn("pb-3", cisCasePage.panelHeaderBorder)}>
+        <CardTitle className={cn(cisCasePage.cardTitle, "text-lg")}>Linked Evidence Clusters</CardTitle>
+        <CardDescription className={cn(cisCasePage.cardDescription, "text-sm")}>
           Shared for this case — groupings from AI analysis that link related files. Run &quot;Analyze cluster&quot;
           for a structured review (seven finding fields plus authenticity label; linkage, corroboration, cohesion).
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
         {!clusters.length ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             No linked clusters yet. Run AI analysis on evidence files; when the model proposes clusters, they
             appear here for everyone on this case.
           </p>

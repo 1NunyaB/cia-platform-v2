@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getEvidenceById, listEvidenceVisualTags, getGuestEvidenceById } from "@/services/evidence-service";
+import {
+  getEvidenceById,
+  getGuestEvidenceById,
+  listEvidenceLinkedCaseIds,
+  listEvidenceVisualTags,
+} from "@/services/evidence-service";
 import { listCasesForUser } from "@/services/case-service";
 import { evidencePrimaryLabel } from "@/lib/evidence-display-alias";
 import { CopyInlineButton } from "@/components/copy-inline-button";
@@ -19,6 +24,7 @@ import { EvidenceWorkflowStatusCard } from "@/components/evidence-workflow-statu
 import { EvidenceDeleteButton } from "@/components/evidence-delete-button";
 import { EvidenceLocationGeoPanel } from "@/components/evidence-location-geo-panel";
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
+import { LinkedCasesControl } from "@/components/linked-cases-control";
 
 /**
  * Library evidence not yet tied to a case. Once `case_id` is set, we send users to the case-scoped URL.
@@ -67,9 +73,10 @@ export default async function LibraryEvidenceDetailPage({
     redirect(`/cases/${ev.case_id as string}/evidence/${evidenceId}`);
   }
 
-  const [cases, visualTags] = await Promise.all([
+  const [cases, visualTags, linkedCaseIds] = await Promise.all([
     user ? listCasesForUser(supabase, user.id) : Promise.resolve([]),
     listEvidenceVisualTags(dataClient, evidenceId),
+    listEvidenceLinkedCaseIds(dataClient, evidenceId).catch(() => [] as string[]),
   ]);
 
   const displayTitle = evidencePrimaryLabel({
@@ -97,6 +104,7 @@ export default async function LibraryEvidenceDetailPage({
 
   const mime = String((ev.mime_type as string | null) ?? "");
   const showImageEvidenceBlock = mime.toLowerCase().startsWith("image/");
+  const canManageCaseLinks = Boolean(user && (ev.uploaded_by as string | null) === user.id);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -188,6 +196,16 @@ export default async function LibraryEvidenceDetailPage({
                   layout="toolbar"
                   evidenceId={evidenceId}
                   cases={cases.map((c) => ({ id: c.id as string, title: (c.title as string) ?? "Untitled" }))}
+                />
+              ) : undefined
+            }
+            linkedCasesControl={
+              user ? (
+                <LinkedCasesControl
+                  evidenceId={evidenceId}
+                  cases={cases.map((c) => ({ id: c.id as string, title: (c.title as string) ?? "Untitled" }))}
+                  initialLinkedCaseIds={linkedCaseIds}
+                  canManage={canManageCaseLinks}
                 />
               ) : undefined
             }

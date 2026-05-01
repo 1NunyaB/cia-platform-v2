@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getEvidenceById,
   getAiAnalysis,
+  listEvidenceLinkedCaseIds,
   listEvidenceVisualTags,
   isEvidenceCaseMembershipTableError,
 } from "@/services/evidence-service";
+import { listCasesForUser } from "@/services/case-service";
 import { listNotesForEvidence, listCommentsForEvidence } from "@/services/notes-service";
 import { listStickyNotesWithReplies } from "@/services/collaboration-service";
 import {
@@ -46,6 +48,7 @@ import { EvidenceWorkflowStatusCard } from "@/components/evidence-workflow-statu
 import { isPlatformDeleteAdmin } from "@/lib/admin-guard";
 import { EvidenceDeleteButton } from "@/components/evidence-delete-button";
 import { EvidenceLocationGeoPanel } from "@/components/evidence-location-geo-panel";
+import { LinkedCasesControl } from "@/components/linked-cases-control";
 
 /** Shown when user arrives from Investigation Actions (?intent=) — same structured pipeline; copy stays conservative. */
 const INVESTIGATION_INTENT_MESSAGES: Record<string, string> = {
@@ -93,6 +96,12 @@ export default async function EvidenceDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  const [allCasesForLinks, linkedCaseIds] = await Promise.all([
+    user ? listCasesForUser(supabase, user.id) : Promise.resolve([]),
+    listEvidenceLinkedCaseIds(supabase, evidenceId).catch(() => [] as string[]),
+  ]);
+  const canManageCaseLinks = Boolean(user && (ev.uploaded_by as string | null) === user.id);
+
   const [analysis, notes, crossLinks, stickyBundles, evidenceComments, visualTags] = await Promise.all([
     getAiAnalysis(supabase, evidenceId),
     listNotesForEvidence(supabase, caseId, evidenceId),
@@ -122,21 +131,20 @@ export default async function EvidenceDetailPage({
     id: c.id as string,
     parent_comment_id: (c.parent_comment_id as string | null) ?? null,
     body: c.body as string,
-    author_id: c.author_id as string | null,
+    user_id: c.user_id as string | null,
     created_at: c.created_at as string,
   }));
   const commentRoots = buildCommentTree(commentFlat);
 
   const authorIds = [
-    ...notes.map((n) => n.author_id as string),
+    ...notes.map((n) => n.user_id as string),
     ...stickyBundles.flatMap((b) => [
-      b.sticky.author_id,
-      ...b.replies.map((r) => r.author_id),
+      b.sticky.user_id,
+      ...b.replies.map((r) => r.user_id),
     ]),
-    ...evidenceComments.map((c) => c.author_id as string),
+    ...evidenceComments.map((c) => c.user_id as string),
   ].filter(Boolean) as string[];
-  const profiles = await fetchProfilesByIds(supabase, [...new Set(authorIds)]);
-  const getProfile = (id: string | null) => (id ? profiles[id] : undefined);
+  const profiles = await fetchProfilesByIds(supabase, [...new Set(userIds)]);
 
   const displayTitle = evidencePrimaryLabel({
     display_filename: ev.display_filename ?? null,
@@ -234,6 +242,20 @@ export default async function EvidenceDetailPage({
             processingErrorMessage={(ev.error_message as string | null | undefined) ?? null}
             assignControl={
               user ? <ShareEvidenceToCaseDialog evidenceId={evidenceId} excludeCaseId={caseId} /> : undefined
+            }
+            linkedCasesControl={
+              user ? (
+                <LinkedCasesControl
+                  evidenceId={evidenceId}
+                  cases={allCasesForLinks.map((c) => ({
+                    id: c.id as string,
+                    title: (c.title as string) ?? "Untitled",
+                  }))}
+                  initialLinkedCaseIds={linkedCaseIds}
+                  canManage={canManageCaseLinks}
+                  contextCaseId={caseId}
+                />
+              ) : undefined
             }
             deleteControl={
               user && isPlatformDeleteAdmin(user) ? (
@@ -416,7 +438,7 @@ export default async function EvidenceDetailPage({
               currentUserId={user?.id ?? null}
               currentUserCanDelete={isPlatformDeleteAdmin(user)}
               initial={stickyBundles}
-              getProfile={getProfile}
+              profilesById={profiles}
             />
           </div>
           <Separator className="bg-border" />
@@ -426,7 +448,7 @@ export default async function EvidenceDetailPage({
               caseId={caseId}
               evidenceFileId={evidenceId}
               roots={commentRoots}
-              getProfile={getProfile}
+              profilesById={profiles}
             />
           </div>
           <Separator className="bg-border" />
@@ -440,8 +462,8 @@ export default async function EvidenceDetailPage({
                 <li key={n.id} className="rounded-md border p-3 text-sm">
                   <p className="text-xs text-muted-foreground mb-1">
                     <AuthorPersonaLine
-                      profile={getProfile(n.author_id as string | null)}
-                      fallbackId={n.author_id as string | null}
+                      profile={n.user_id ? profiles[n.user_id as string] : undefined}
+                      fallbackId={n.user_id as string | null}
                     />{" "}
                     <span className="text-muted-foreground/70">
                       {new Date(n.created_at as string).toLocaleString()}

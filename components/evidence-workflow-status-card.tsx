@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CheckCircle2, FolderPlus, Loader2, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, FolderPlus, Link2, Loader2, Sparkles, XCircle } from "lucide-react";
 import { dispatchWorkspaceAiAttachEvidence } from "@/lib/workspace-evidence-ai-bridge";
 import type { EvidenceProcessingStatus } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ export function EvidenceWorkflowStatusCard({
   evidenceId,
   uploadHref,
   assignControl,
+  linkedCasesControl,
   deleteControl,
   processingErrorMessage = null,
   evidenceDisplayLabel = null,
@@ -35,6 +36,8 @@ export function EvidenceWorkflowStatusCard({
   evidenceId: string;
   uploadHref: string;
   assignControl?: ReactNode;
+  /** Multi-case checklist (library + case detail). */
+  linkedCasesControl?: ReactNode;
   deleteControl?: ReactNode;
   processingErrorMessage?: string | null;
   evidenceDisplayLabel?: string | null;
@@ -79,6 +82,13 @@ export function EvidenceWorkflowStatusCard({
           <span className="font-semibold">Add to case</span>
           <span className="block text-foreground/95">{assignControl ?? "—"}</span>
         </CompactLine>
+
+        {linkedCasesControl ? (
+          <CompactLine icon={<Link2 className="h-4 w-4 text-sky-900" />}>
+            <span className="font-semibold">Linked cases</span>
+            <span className="block text-foreground/95">{linkedCasesControl}</span>
+          </CompactLine>
+        ) : null}
 
         <CompactLine icon={<Sparkles className="h-4 w-4 text-indigo-800" />}>
           <span className="font-semibold">Add to evidence stack(s)</span>

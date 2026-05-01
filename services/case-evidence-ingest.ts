@@ -55,6 +55,7 @@ export async function ingestUploadedFile(
   supabase: AppSupabaseClient,
   input: {
     caseId: string | null;
+    incidentEntryId?: string | null;
     userId: string;
     file: File;
     source?: EvidenceSourcePayload;
@@ -70,7 +71,7 @@ export async function ingestUploadedFile(
     imageCategory?: string | null;
   },
 ): Promise<IngestResult> {
-  const { caseId, userId, file, source, forceDuplicate, audit, imageCategory } = input;
+  const { caseId, incidentEntryId, userId, file, source, forceDuplicate, audit, imageCategory } = input;
   const buffer = Buffer.from(await file.arrayBuffer());
   const mime = file.type || null;
   const normalizedCategory =
@@ -158,6 +159,7 @@ export async function ingestUploadedFile(
       processingStatus: "accepted",
       ...(source ? { source } : {}),
       ...(normalizedCategory ? { imageCategory: normalizedCategory } : {}),
+      ...(incidentEntryId?.trim() ? { incidentEntryId: incidentEntryId.trim() } : {}),
       ...(audit
         ? {
             audit: {

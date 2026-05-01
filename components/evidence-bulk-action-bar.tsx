@@ -26,6 +26,8 @@ import {
   type InvestigationStackKind,
 } from "@/lib/investigation-stacks";
 import { dispatchWorkspaceAiAttachEvidence } from "@/lib/workspace-evidence-ai-bridge";
+import { cisCasePage } from "@/lib/cis-case-page-shell";
+import { cn } from "@/lib/utils";
 
 type Props = {
   variant: "library" | "case";
@@ -36,6 +38,8 @@ type Props = {
   onClearSelection: () => void;
   /** Render as an inline panel (dashboard) instead of sticky footer. */
   inline?: boolean;
+  /** Dark CIS case evidence list (case detail page). */
+  appearance?: "default" | "cisCase";
 };
 
 export function EvidenceBulkActionBar({
@@ -45,6 +49,7 @@ export function EvidenceBulkActionBar({
   selectedIds,
   onClearSelection,
   inline = false,
+  appearance = "default",
 }: Props) {
   const router = useRouter();
   const [assignCaseId, setAssignCaseId] = useState<string>("");
@@ -182,19 +187,26 @@ export function EvidenceBulkActionBar({
 
   if (n === 0) return null;
 
+  const cis = appearance === "cisCase";
+
   return (
     <>
       <div
-        className={
+        className={cn(
+          "flex flex-col gap-2 rounded-lg p-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between",
           inline
-            ? "flex flex-col gap-2 rounded-lg border border-sky-400 bg-sky-50/80 p-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
-            : "sticky bottom-4 z-40 flex flex-col gap-2 rounded-lg border-2 border-sky-500 bg-sky-50/95 p-3 shadow-lg sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
-        }
+            ? cis
+              ? "border border-[#1e2d42] bg-[#141e2e]"
+              : "border border-sky-400 bg-sky-50/80"
+            : cis
+              ? "sticky bottom-4 z-40 border-2 border-sky-500/40 bg-[#141e2e] p-3 shadow-lg"
+              : "sticky bottom-4 z-40 border-2 border-sky-500 bg-sky-50/95 p-3 shadow-lg",
+        )}
       >
-        <p className="text-sm font-semibold text-sky-950">
+        <p className={cn("text-sm font-semibold", cis ? "text-sky-200" : "text-sky-950")}>
           {n} selected
           {lastMessage ? (
-            <span className="ml-2 font-normal text-foreground/90">— {lastMessage}</span>
+            <span className={cn("ml-2 font-normal", cis ? "text-slate-400" : "text-foreground/90")}>— {lastMessage}</span>
           ) : null}
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -225,7 +237,13 @@ export function EvidenceBulkActionBar({
             </>
           ) : null}
 
-          <Button type="button" size="sm" variant="secondary" className="h-9 border-sky-600 bg-white" onClick={openStacksDialog}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className={cn("h-9", cis ? cisCasePage.secondaryBtn : "border-sky-600 bg-white")}
+            onClick={openStacksDialog}
+          >
             Add to evidence stack(s)…
           </Button>
 
@@ -233,7 +251,12 @@ export function EvidenceBulkActionBar({
             type="button"
             size="sm"
             variant="secondary"
-            className="h-9 border-sky-700 bg-sky-100 font-semibold text-sky-950 hover:bg-sky-200"
+            className={cn(
+              "h-9 font-semibold",
+              cis
+                ? cisCasePage.sendToAiBtn
+                : "border-sky-700 bg-sky-100 text-sky-950 hover:bg-sky-200",
+            )}
             onClick={() => {
               setLastMessage(null);
               dispatchWorkspaceAiAttachEvidence({
@@ -250,14 +273,20 @@ export function EvidenceBulkActionBar({
             type="button"
             size="sm"
             variant="default"
-            className="h-9"
+            className={cn("h-9", cis && "border border-blue-600 bg-[#1e40af] text-white hover:bg-blue-600")}
             disabled={viewedBusy}
             onClick={() => void runMarkViewed()}
           >
             {viewedBusy ? <InvestigationLoadingIndicator inline label="Saving…" /> : "Mark viewed"}
           </Button>
 
-          <Button type="button" size="sm" variant="outline" className="h-9" onClick={onClearSelection}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn("h-9", cis && cisCasePage.outlineBtn)}
+            onClick={onClearSelection}
+          >
             Clear selection
           </Button>
         </div>

@@ -57,5 +57,16 @@ export async function logActivity(
     entity_id: input.entityId ?? null,
     payload: input.payload ?? {},
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (
+      input.caseId == null &&
+      msg.includes("null value in column \"case_id\"") &&
+      msg.includes("activity_log")
+    ) {
+      console.warn("[activity] skipping library event: activity_log.case_id is NOT NULL on this DB");
+      return;
+    }
+    throw new Error(error.message);
+  }
 }

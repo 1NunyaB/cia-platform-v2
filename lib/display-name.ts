@@ -1,11 +1,11 @@
 /** Resolve a readable label for notes/comments when auth profiles are absent. */
 export function authorDisplayName(
-  row: { author_id?: string | null; author_label?: string | null },
+  row: { user_id?: string | null; user_label?: string | null },
   profiles: Record<string, { display_name: string | null }>,
 ): string {
-  const label = row.author_label?.trim();
+  const label = row.user_label?.trim();
   if (label) return label;
-  const id = row.author_id;
+  const id = row.user_id;
   if (id && profiles[id]?.display_name) return profiles[id].display_name ?? id;
   if (id) return id;
   return "Analyst";

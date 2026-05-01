@@ -10,6 +10,8 @@ import type { ClusterAnalysisView, StructuredFinding } from "@/types/analysis";
 import { AnalysisFindingPanel } from "@/components/analysis-finding-panel";
 import { ConcealedLanguagePanel } from "@/components/concealed-language-panel";
 import { Button } from "@/components/ui/button";
+import { cisCasePage } from "@/lib/cis-case-page-shell";
+import { cn } from "@/lib/utils";
 
 export function EvidenceClusterBlock({
   caseId,
@@ -62,25 +64,25 @@ export function EvidenceClusterBlock({
   }
 
   return (
-    <li className="rounded-lg border border-border bg-panel p-4 text-sm text-foreground space-y-3">
+    <li className="space-y-3 rounded-lg border border-[#1e2d42] bg-[#111827]/80 p-4 text-sm text-slate-200">
       <div className="flex flex-wrap items-baseline justify-between gap-2 gap-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-foreground">{cluster.title ?? "Untitled cluster"}</span>
+          <span className="font-medium text-white">{cluster.title ?? "Untitled cluster"}</span>
           {cluster.cluster_kind === "alias_focused" ? (
             <span
-              className="text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded border border-amber-300 text-amber-950 bg-amber-50"
+              className="rounded border border-amber-500/40 bg-amber-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200"
               title="Cluster driven primarily by identity / alias linkage across sources"
             >
               Alias-focused
             </span>
           ) : null}
         </div>
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
           {n} file{n === 1 ? "" : "s"}
         </span>
       </div>
       {cluster.rationale ? (
-        <p className="text-xs text-muted-foreground leading-relaxed">{cluster.rationale}</p>
+        <p className="text-xs leading-relaxed text-slate-500">{cluster.rationale}</p>
       ) : null}
       <ul className="flex flex-wrap gap-2" aria-label="Linked evidence files">
         {members.map((m) => {
@@ -100,14 +102,14 @@ export function EvidenceClusterBlock({
               <Link
                 href={`/cases/${caseId}/evidence/${eid}`}
                 title={aliasTrace ? "Member linked via alias-resolution clustering" : undefined}
-                className="inline-flex rounded border border-border bg-white px-2 py-1 text-xs text-blue-900 font-medium hover:bg-sky-50 hover:underline"
+                className="inline-flex rounded border border-[#1e2d42] bg-[#0f1623] px-2 py-1 text-xs font-medium text-sky-300 hover:border-sky-500/40 hover:bg-[#1a2335] hover:underline"
               >
                 {displayLabel}
                 {shortAlias ? (
-                  <span className="ml-1 text-muted-foreground font-normal">· {shortAlias}</span>
+                  <span className="ml-1 font-normal text-slate-500">· {shortAlias}</span>
                 ) : null}
                 {aliasTrace ? (
-                  <span className="ml-1 text-[10px] text-amber-900" aria-hidden>
+                  <span className="ml-1 text-[10px] text-amber-300/90" aria-hidden>
                     · alias
                   </span>
                 ) : null}
@@ -121,7 +123,7 @@ export function EvidenceClusterBlock({
           type="button"
           size="sm"
           variant="secondary"
-          className="border-border"
+          className={cn(cisCasePage.secondaryBtn)}
           disabled={loading}
           onClick={() => void runAnalyze()}
         >
@@ -134,10 +136,10 @@ export function EvidenceClusterBlock({
             "Analyze cluster"
           )}
         </Button>
-        {error ? <span className="text-xs text-alert-foreground font-medium">{error}</span> : null}
+        {error ? <span className="text-xs font-medium text-red-400">{error}</span> : null}
       </div>
       {analysis ? (
-        <div className="pt-2 border-t border-border space-y-4">
+        <div className="space-y-4 border-t border-[#1e2d42] pt-2">
           <AnalysisFindingPanel
             finding={analysis.finding}
             authenticityLabel={analysis.authenticityLabel}
