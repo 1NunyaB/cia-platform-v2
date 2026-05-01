@@ -2,7 +2,7 @@ export type FlatComment = {
   id: string;
   parent_comment_id: string | null;
   body: string;
-  use_id: string | null;
+  user_id: string | null;
   created_at: string;
 };
 
